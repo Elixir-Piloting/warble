@@ -1,0 +1,87 @@
+[package]
+name = "warble"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+# Workspace root for the vendored pocket-tts crate so its
+# inherited keys (version/edition/dependencies) resolve.
+[workspace]
+resolver = "2"
+members = [".", "crates/pocket-tts"]
+
+[workspace.package]
+version = "0.6.2"
+edition = "2024"
+authors = ["Pocket TTS Contributors"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/babybirdprd/pocket-tts"
+homepage = "https://github.com/babybirdprd/pocket-tts"
+keywords = ["tts", "candle", "speech-synthesis", "audio"]
+categories = ["multimedia::audio", "science"]
+
+[workspace.dependencies]
+candle-core = "0.9.1"
+candle-nn = "0.9.1"
+candle-transformers = "0.9.1"
+safetensors = "0.5.2"
+hf-hub = "0.4.3"
+anyhow = "1.0"
+thiserror = "2.0"
+hound = "3.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+byteorder = "1.5"
+memmap2 = "0.9"
+clap = { version = "4.5", features = ["derive"] }
+tokenizers = { version = "0.21.0", default-features = false }
+axum = "0.7"
+tokio = "1.0"
+tower = "0.4"
+tower-http = "0.5"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+# Pinned to the local fork via [patch.crates-io] below: candle-core/candle-nn
+# force intel-mkl-src's `mkl-static-lp64-iomp`, whose OpenMP import lib needs
+# a libiomp5md.dll that isn't shipped (STATUS_DLL_NOT_FOUND). The fork builds
+# the single-threaded `seq` variant instead and links fully statically.
+intel-mkl-src = { version = "0.8.1", features = ["mkl-static-lp64-seq"] }
+rand = "0.8"
+rand_distr = "0.4"
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+# `staticlib` is intentionally omitted: rustc's archive builder stack-overflows
+# on the large MKL object library ("compiler unexpectedly panicked"); the Tauri
+# binary only needs the `rlib` (and `cdylib` for mobile targets).
+name = "warble_lib"
+crate-type = ["cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Vendored local TTS engine (pocket-tts / Candle).
+# int8-equivalent quantization is gated behind the "quantized" feature;
+# "mkl" links Intel oneMKL for fast CPU GEMM (x86/x86_64).
+pocket-tts = { path = "crates/pocket-tts", features = ["quantized", "mkl"] }
+candle-core.workspace = true
+
+# Override crates.io intel-mkl-src for ALL dependents (incl. candle-core /
+# candle-nn, which hard-require the iomp variant) with our fork that always
+# builds the fully-static single-threaded config. See the workspace.dependencies
+# comment above.
+[patch.crates-io]
+intel-mkl-src = { path = "crates/intel-mkl-src" }

@@ -1,0 +1,46 @@
+import { useMemo, useState } from "react"
+import { Download, FileAudio, Gauge, History, LoaderCircle, Search, Sparkles, Square } from "lucide-react"
+import { AudioPlayerButton, AudioPlayerDuration, AudioPlayerProgress, AudioPlayerProvider, AudioPlayerSpeed, AudioPlayerTime } from "@/components/ui/audio-player"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { TooltipProvider } from "@/components/ui/tooltip"
+import { GenerationSettings, GenerationSettingsPanel } from "@/components/generation-settings"
+import { HistoryItem } from "@/components/history-item"
+import { STOCK_VOICES } from "@/components/voice-data"
+import { VoicePickerDialog } from "@/components/voice-picker-dialog"
+
+interface ModelInfo { variant: string; sampleRate: number; channels: number; quantized: boolean }
+interface HistoryEntry { id: number; name: string; createdAt: number; charCount: number; chunkCount: number; speechSec: number; elapsedSec: number; buffers: AudioBuffer[]; sampleRate: number; channels: number }
+interface TtsWorkspaceProps {
+  text: string; onTextChange: (value: string) => void; modelInfo: ModelInfo | null; variant: string; loading: boolean; generating: boolean; status: string; progress: number; chunkCount: number; streamedSec: number; elapsedSec: number; streamPlaying: boolean; onToggleStreamPlayback: () => void;
+  voiceId: string | null; stockVoice: string; voiceOpen: boolean; onVoiceOpenChange: (open: boolean) => void; voiceSearch: string; onVoiceSearchChange: (value: string) => void; voiceSpec: string; onVoiceSpecChange: (value: string) => void; onLoadVoice: (spec?: string) => void;
+  onGenerate: () => void; onStopGeneration: () => void; history: HistoryEntry[]; currentClip: HistoryEntry | null; generatedAudioSrc: string | null; onReplay: (entry: HistoryEntry) => void; onDownload: (entry: HistoryEntry) => void;
+  generationSettings: GenerationSettings; hasPendingSettings: boolean; onGenerationSettingsChange: (settings: GenerationSettings) => void; onReloadModel: () => void; onResetGenerationSettings: () => void; onInsertPause: () => void;
+}
+
+export function TtsWorkspace(props: TtsWorkspaceProps) {
+  const [rightTab, setRightTab] = useState<"settings" | "history">("history")
+  const selectedVoice = STOCK_VOICES.find((voice) => voice.id === props.stockVoice) ?? STOCK_VOICES[0]
+  const showTransport = Boolean(props.currentClip && props.generatedAudioSrc)
+
+  return <TooltipProvider><div className="h-screen overflow-hidden bg-background text-foreground"><div className="grid h-full min-h-0 lg:grid-cols-[minmax(0,1fr)_460px]"><main className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] border-r border-border"><section className="min-h-0 overflow-y-auto"><div className="mx-auto flex h-full w-full max-w-5xl flex-col px-8 py-16 lg:px-16"><Textarea value={props.text} onChange={(event) => props.onTextChange(event.currentTarget.value)} className="field-sizing-fixed min-h-[420px] flex-1 resize-none overflow-y-auto border-0 bg-transparent p-0 text-lg leading-8 shadow-none focus-visible:ring-0 md:text-xl" placeholder="Write something to say…" /><div className="mt-8 flex shrink-0 flex-wrap items-center justify-between gap-3"><Button variant="ghost" size="sm" onClick={props.onInsertPause}>Insert pause</Button><div className="flex items-center gap-2"><Button onClick={props.onGenerate} disabled={props.generating || props.loading}>{props.generating ? <><LoaderCircle className="animate-spin" /> Generating</> : <><Sparkles /> Generate speech</>}</Button>{props.generating && <Button size="icon" variant="outline" onClick={props.onStopGeneration} aria-label="Stop generation"><Square /></Button>}</div></div></div></section>{showTransport && <GeneratedAudioPlayer clip={props.currentClip!} src={props.generatedAudioSrc!} onDownload={props.onDownload} />}</main><aside className="min-h-0 overflow-hidden"> <div className="flex h-full min-h-0 flex-col"><div className="flex shrink-0 gap-5 border-b border-border px-5 pt-4"><TabButton active={rightTab === "settings"} onClick={() => setRightTab("settings")}>Settings</TabButton><TabButton active={rightTab === "history"} onClick={() => setRightTab("history")}>History</TabButton></div><div className="min-h-0 flex-1 overflow-y-auto">{rightTab === "settings" ? <SettingsPanel {...props} selectedVoice={selectedVoice} /> : <HistoryPanel {...props} />}</div></div></aside></div></div></TooltipProvider>
+}
+
+function TabButton({ active, children, onClick }: { active: boolean; children: string; onClick: () => void }) { return <button onClick={onClick} className={`border-b-2 pb-3 text-sm ${active ? "border-foreground font-medium" : "border-transparent text-muted-foreground"}`}>{children}</button> }
+
+function GeneratedAudioPlayer({ clip, src, onDownload }: { clip: HistoryEntry; src: string; onDownload: (entry: HistoryEntry) => void }) {
+  const item = { id: clip.id, src }
+  return <AudioPlayerProvider><footer className="flex min-h-20 shrink-0 items-center gap-5 border-t border-border bg-background px-5 py-3"><div className="min-w-0 flex-1 basis-0"><p className="truncate text-sm font-medium">{clip.name}</p><p className="mt-1 text-xs text-muted-foreground">Local voice · {clip.speechSec.toFixed(2)} seconds</p></div><div className="flex w-full max-w-xl items-center gap-3"><AudioPlayerButton item={item} size="icon-lg" className="rounded-full" /><AudioPlayerTime /><AudioPlayerProgress className="min-w-20 flex-1" /><AudioPlayerDuration /><AudioPlayerSpeed size="icon-sm" /></div><div className="flex flex-1 basis-0 justify-end"><Button variant="ghost" size="icon-sm" onClick={() => onDownload(clip)} aria-label="Download WAV"><Download /></Button></div></footer></AudioPlayerProvider>
+}
+
+function SettingsPanel({ ...props }: TtsWorkspaceProps & { selectedVoice: (typeof STOCK_VOICES)[number] }) {
+  return <div className="flex flex-col gap-7 p-5"><section><h2 className="text-sm font-medium">Voice</h2><div className="mt-3 rounded-lg border border-border"><VoicePickerDialog open={props.voiceOpen} onOpenChange={props.onVoiceOpenChange} selectedId={props.selectedVoice.id} hasVoice={Boolean(props.voiceId)} search={props.voiceSearch} onSearchChange={props.onVoiceSearchChange} onLoad={props.onLoadVoice} customVoice={props.voiceSpec} onCustomVoiceChange={props.onVoiceSpecChange} loading={props.loading} variant={props.variant} /></div></section><section><h2 className="text-sm font-medium">Model</h2><div className="mt-3 rounded-lg border border-border px-3 py-3"><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-sm"><Badge variant="outline" className="px-1.5 py-0 text-[10px]">LOCAL</Badge>{props.variant}</span><span className="text-xs text-muted-foreground">{props.modelInfo ? "Ready" : "Loading"}</span></div>{props.modelInfo && <p className="mt-2 text-xs text-muted-foreground">{props.modelInfo.sampleRate} Hz · {props.modelInfo.channels} channel{props.modelInfo.quantized ? " · quantized" : ""}</p>}</div></section><GenerationSettingsPanel settings={props.generationSettings} onChange={props.onGenerationSettingsChange} onReload={props.onReloadModel} onReset={props.onResetGenerationSettings} hasChanges={props.hasPendingSettings} loading={props.loading} generating={props.generating} /><section><h2 className="text-sm font-medium">Output</h2><div className="mt-3 divide-y rounded-lg border border-border"><div className="flex items-center justify-between px-3 py-3 text-sm"><span className="flex items-center gap-2"><FileAudio className="size-4 text-muted-foreground" /> WAV audio</span><span className="text-xs text-muted-foreground">44.1 kHz</span></div><div className="flex items-center justify-between px-3 py-3 text-sm"><span className="flex items-center gap-2"><Gauge className="size-4 text-muted-foreground" /> Stream playback</span><span className="text-xs text-primary">On</span></div></div></section></div>
+}
+
+function HistoryPanel(props: TtsWorkspaceProps) {
+  const [query, setQuery] = useState("")
+  const entries = useMemo(() => props.history.filter((entry) => entry.name.toLowerCase().includes(query.trim().toLowerCase())), [props.history, query])
+  return <div className="p-5"><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder="Search history…" className="pl-9" /></div>{entries.length === 0 ? <div className="py-14 text-center text-sm text-muted-foreground"><History className="mx-auto size-5" /><p className="mt-3">{props.history.length ? "No matching generations" : "No generations yet"}</p></div> : <div className="mt-6 flex flex-col gap-1">{entries.map((entry) => <HistoryItem key={entry.id} name={entry.name} duration={entry.speechSec} active={props.currentClip?.id === entry.id} onPlay={() => props.onReplay(entry)} onDownload={() => props.onDownload(entry)} disabled={props.generating} />)}</div>}</div>
+}

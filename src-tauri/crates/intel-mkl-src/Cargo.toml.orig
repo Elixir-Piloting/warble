@@ -1,0 +1,39 @@
+[package]
+name = "intel-mkl-src"
+version = "0.8.1"
+authors = ["Toshiki Teramura <toshiki.teramura@gmail.com>"]
+edition = "2018"
+
+rust-version = "1.61.0"
+
+description = "Redistribution of Intel(R) MKL as a crate"
+repository = "https://github.com/rust-math/intel-mkl-src"
+keywords = ["fft", "blas", "lapack"]
+license-file = "../License.txt"
+readme = "../README.md"
+
+build = "build.rs"
+links = "mkl_core"
+
+[features]
+default = []
+
+# MKL config
+# https://software.intel.com/content/www/us/en/develop/articles/intel-math-kernel-library-intel-mkl-and-pkg-config-tool.html
+mkl-static-lp64-iomp   = []
+mkl-static-lp64-seq    = []
+mkl-static-ilp64-iomp  = []
+mkl-static-ilp64-seq   = []
+mkl-dynamic-lp64-iomp  = []
+mkl-dynamic-lp64-seq   = []
+mkl-dynamic-ilp64-iomp = []
+mkl-dynamic-ilp64-seq  = []
+
+[build-dependencies]
+anyhow = "1.0.58"
+ocipkg = "0.2.8"
+
+[build-dependencies.intel-mkl-tool]
+path = "../intel-mkl-tool"
+version = "0.8.0"
+default-features = false
