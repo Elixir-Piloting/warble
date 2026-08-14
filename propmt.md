@@ -2,7 +2,7 @@ You are given a task to integrate an existing React component in the codebase
 
 The codebase should support:
 
-- shadcn project structure  
+- shadcn project structure
 
 - Tailwind CSS
 
@@ -10,7 +10,7 @@ The codebase should support:
 
 If it doesn't, provide instructions on how to setup project via shadcn CLI, install Tailwind or Typescript.
 
-Determine the default path for components and styles. 
+Determine the default path for components and styles.
 
 If default path for components is not /components/ui, provide instructions on why it's important to create this folder
 
@@ -2263,4 +2263,3 @@ Install NPM dependencies:
 lucide-react, @radix-ui/react-slider, @radix-ui/react-slot, class-variance-authority, @radix-ui/react-scroll-area, @radix-ui/react-separator, @radix-ui/react-dropdown-menu
 
 ```
-

@@ -1,17 +1,170 @@
-import { CircleHelp, RotateCcw } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { CircleHelp, RotateCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-export interface GenerationSettings { temperature: number; lsdDecodeSteps: number; eosThreshold: number; noiseClamp: number | null; voicePromptChunkFrames: number | null }
-interface GenerationSettingsProps { settings: GenerationSettings; onChange: (settings: GenerationSettings) => void; onReload: () => void; onReset: () => void; hasChanges: boolean; loading: boolean; generating: boolean }
-
-function SettingLabel({ htmlFor, children, help }: { htmlFor: string; children: React.ReactNode; help: string }) {
-  return <div className="flex items-center gap-1.5"><Label htmlFor={htmlFor}>{children}</Label><Tooltip><TooltipTrigger asChild><button type="button" className="text-muted-foreground hover:text-foreground" aria-label={`About ${String(children)}`}><CircleHelp className="size-3.5" /></button></TooltipTrigger><TooltipContent className="max-w-60"><p>{help}</p></TooltipContent></Tooltip></div>
+export interface GenerationSettings {
+  temperature: number;
+  lsdDecodeSteps: number;
+  eosThreshold: number;
+  noiseClamp: number | null;
+  voicePromptChunkFrames: number | null;
+}
+interface GenerationSettingsProps {
+  settings: GenerationSettings;
+  onChange: (settings: GenerationSettings) => void;
+  onReload: () => void;
+  onReset: () => void;
+  hasChanges: boolean;
+  loading: boolean;
+  generating: boolean;
 }
 
-export function GenerationSettingsPanel({ settings, onChange, onReload, onReset, hasChanges, loading, generating }: GenerationSettingsProps) {
-  const update = <K extends keyof GenerationSettings>(key: K, value: GenerationSettings[K]) => onChange({ ...settings, [key]: value })
-  return <section><div className="flex items-center justify-between"><h2 className="text-sm font-medium">Generation</h2><span className="text-xs text-muted-foreground">{hasChanges ? "Changes pending" : "Applied"}</span></div><div className="mt-3 flex flex-col gap-4 rounded-lg border border-border p-3"><div className="grid gap-1.5"><SettingLabel htmlFor="temperature" help="Controls randomness. Higher values make speech more varied; lower values make it more consistent.">Temperature <span className="text-muted-foreground">{settings.temperature.toFixed(2)}</span></SettingLabel><Input id="temperature" type="range" min="0.05" max="2" step="0.05" value={settings.temperature} onChange={(event) => update("temperature", Number(event.currentTarget.value))} className="h-1.5 cursor-pointer accent-primary" /></div><div className="grid gap-1.5"><SettingLabel htmlFor="decode-steps" help="How many decoding passes to use. More steps can improve quality, but take longer.">Decode steps</SettingLabel><Input id="decode-steps" type="number" min="1" max="8" step="1" value={settings.lsdDecodeSteps} onChange={(event) => update("lsdDecodeSteps", Number(event.currentTarget.value) || 1)} /></div><div className="grid gap-1.5"><SettingLabel htmlFor="eos-threshold" help="Controls when the model decides the utterance has ended. Keep the default unless you are tuning cutoffs.">EOS threshold</SettingLabel><Input id="eos-threshold" type="number" min="-12" max="0" step="0.1" value={settings.eosThreshold} onChange={(event) => update("eosThreshold", Number(event.currentTarget.value))} /></div><div className="grid grid-cols-2 gap-3"><div className="grid gap-1.5"><SettingLabel htmlFor="noise-clamp" help="Limits noise during generation. Leave blank for the model default.">Noise clamp</SettingLabel><Input id="noise-clamp" type="number" min="0" step="0.05" placeholder="Off" value={settings.noiseClamp ?? ""} onChange={(event) => update("noiseClamp", event.currentTarget.value === "" ? null : Number(event.currentTarget.value))} /></div><div className="grid gap-1.5"><SettingLabel htmlFor="prompt-frames" help="Sets the number of voice-prompt frames. Leave blank to adapt automatically.">Prompt frames</SettingLabel><Input id="prompt-frames" type="number" min="1" step="1" placeholder="Adaptive" value={settings.voicePromptChunkFrames ?? ""} onChange={(event) => update("voicePromptChunkFrames", event.currentTarget.value === "" ? null : Number(event.currentTarget.value))} /></div></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={onReload} disabled={!hasChanges || loading || generating}><RotateCcw /> Apply settings</Button><Button variant="ghost" onClick={onReset} disabled={!hasChanges || loading || generating}>Reset to defaults</Button></div></div></section>
+function SettingLabel({ htmlFor, children, help }: { htmlFor: string; children: React.ReactNode; help: string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Label htmlFor={htmlFor}>{children}</Label>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground"
+            aria-label={`About ${String(children)}`}
+          >
+            <CircleHelp className="size-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-60">
+          <p>{help}</p>
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}
+
+export function GenerationSettingsPanel({
+  settings,
+  onChange,
+  onReload,
+  onReset,
+  hasChanges,
+  loading,
+  generating,
+}: GenerationSettingsProps) {
+  const update = <K extends keyof GenerationSettings>(key: K, value: GenerationSettings[K]) =>
+    onChange({ ...settings, [key]: value });
+  return (
+    <section>
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-medium">Generation</h2>
+        <span className="text-muted-foreground text-xs">{hasChanges ? "Changes pending" : "Applied"}</span>
+      </div>
+      <div className="border-border mt-3 flex flex-col gap-4 rounded-lg border p-3">
+        <div className="grid gap-1.5">
+          <SettingLabel
+            htmlFor="temperature"
+            help="Controls randomness. Higher values make speech more varied; lower values make it more consistent."
+          >
+            Temperature <span className="text-muted-foreground">{settings.temperature.toFixed(2)}</span>
+          </SettingLabel>
+          <Input
+            id="temperature"
+            type="range"
+            min="0.05"
+            max="2"
+            step="0.05"
+            value={settings.temperature}
+            onChange={(event) => update("temperature", Number(event.currentTarget.value))}
+            className="accent-primary h-1.5 cursor-pointer"
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <SettingLabel
+            htmlFor="decode-steps"
+            help="How many decoding passes to use. More steps can improve quality, but take longer."
+          >
+            Decode steps
+          </SettingLabel>
+          <Input
+            id="decode-steps"
+            type="number"
+            min="1"
+            max="8"
+            step="1"
+            value={settings.lsdDecodeSteps}
+            onChange={(event) => update("lsdDecodeSteps", Number(event.currentTarget.value) || 1)}
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <SettingLabel
+            htmlFor="eos-threshold"
+            help="Controls when the model decides the utterance has ended. Keep the default unless you are tuning cutoffs."
+          >
+            EOS threshold
+          </SettingLabel>
+          <Input
+            id="eos-threshold"
+            type="number"
+            min="-12"
+            max="0"
+            step="0.1"
+            value={settings.eosThreshold}
+            onChange={(event) => update("eosThreshold", Number(event.currentTarget.value))}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-1.5">
+            <SettingLabel
+              htmlFor="noise-clamp"
+              help="Limits noise during generation. Leave blank for the model default."
+            >
+              Noise clamp
+            </SettingLabel>
+            <Input
+              id="noise-clamp"
+              type="number"
+              min="0"
+              step="0.05"
+              placeholder="Off"
+              value={settings.noiseClamp ?? ""}
+              onChange={(event) =>
+                update("noiseClamp", event.currentTarget.value === "" ? null : Number(event.currentTarget.value))
+              }
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <SettingLabel
+              htmlFor="prompt-frames"
+              help="Sets the number of voice-prompt frames. Leave blank to adapt automatically."
+            >
+              Prompt frames
+            </SettingLabel>
+            <Input
+              id="prompt-frames"
+              type="number"
+              min="1"
+              step="1"
+              placeholder="Adaptive"
+              value={settings.voicePromptChunkFrames ?? ""}
+              onChange={(event) =>
+                update(
+                  "voicePromptChunkFrames",
+                  event.currentTarget.value === "" ? null : Number(event.currentTarget.value)
+                )
+              }
+            />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={onReload} disabled={!hasChanges || loading || generating}>
+            <RotateCcw /> Apply settings
+          </Button>
+          <Button variant="ghost" onClick={onReset} disabled={!hasChanges || loading || generating}>
+            Reset to defaults
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
 }

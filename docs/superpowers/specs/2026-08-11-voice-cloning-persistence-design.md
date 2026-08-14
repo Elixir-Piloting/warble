@@ -134,8 +134,8 @@ Modified `generate_tts_stream(text, voice_id, name, voice_label)`:
   live playback unchanged; the DB row is the durable copy. Frontend refreshes
   via `list_history()` after `tts://done`.
 
-Registered in `lib.rs`; `TtsState` also manages the store (or the store is a
-separately managed `Mut<Store>`).
+Registered in `lib.rs`. The store is managed separately: `app.manage(Mut<Store>)`
+where `Store` wraps the connection + data-dir path.
 
 ## Frontend
 

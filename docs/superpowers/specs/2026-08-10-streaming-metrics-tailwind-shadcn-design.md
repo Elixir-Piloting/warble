@@ -39,11 +39,13 @@ Replace buffer-then-play semantics with a streaming player owned by a
 `useRef`-backed queue.
 
 **Chunk ingestion:**
+
 - On `tts://chunk`: decode `pcm` (i16 LE) → `Float32Array` → `AudioBuffer`
   via the existing `pcmBytesToFloat32` helper; push `{ buffer, duration }`
   onto a FIFO queue; update chunk count and live elapsed metrics.
 
 **Scheduling (gapless):**
+
 - Maintain one shared `AudioContext` (created lazily, resumed on first play).
 - Keep `nextPlayTime` = `ctx.currentTime` while idle. Each enqueued buffer is
   scheduled for `start(nextPlayTime)` with a `BufferSource` connected to
@@ -55,6 +57,7 @@ Replace buffer-then-play semantics with a streaming player owned by a
 - Sources chained back-to-back on the audio clock give gapless playback.
 
 **Stop:**
+
 - A **Stop** button clears the queue, stops all scheduled sources (keep refs in
   a `Set`), resets `nextPlayTime` and metrics. Generation itself continues in
   Rust unless the user cancels; the UI simply ignores post-stop chunks (guard
@@ -90,7 +93,7 @@ Install and wire (no custom theme work):
 5. `pnpm dlx shadcn@latest init` — neutral base color, defaults; generates
    `components.json`, `src/lib/utils.ts`, theme CSS variables (light default).
 6. `pnpm dlx shadcn@latest add button card input label select textarea badge
-   progress`
+progress`
 7. Rebuild `App.tsx`: shadcn `Card` per section (Model / Voice / Generate),
    `Button`, `Input`, `Select` (stock voices), `Textarea`, `Label`, `Badge`,
    `Progress` (stream progress = streamed audio ms / total expected ms).

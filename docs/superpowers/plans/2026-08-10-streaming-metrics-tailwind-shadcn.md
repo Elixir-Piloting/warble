@@ -23,6 +23,7 @@
 ### Task 1: Tailwind v4 wiring
 
 **Files:**
+
 - Modify: `package.json` (via `pnpm add`)
 - Modify: `vite.config.ts`
 - Modify: `tsconfig.json`
@@ -31,6 +32,7 @@
 - Delete: `src/App.css`
 
 **Interfaces:**
+
 - Produces: `src/index.css` (Tailwind v4 entry, imports via `@import "tailwindcss"`), `@/*` alias resolving to `./src/*` in both Vite and TypeScript.
 
 - [ ] **Step 1: Install Tailwind v4**
@@ -118,7 +120,7 @@ import "./index.css";
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <App />
-  </React.StrictMode>,
+  </React.StrictMode>
 );
 ```
 
@@ -137,6 +139,7 @@ Expected: `tsc` typechecks clean and `vite build` succeeds (Tailwind v4 scans so
 ### Task 2: Install and initialize shadcn/ui
 
 **Files:**
+
 - Create: `components.json` (CLI-generated)
 - Create: `src/lib/utils.ts` (CLI-generated)
 - Modify: `src/index.css` (CLI adds theme variables + `@theme inline` mapping)
@@ -144,6 +147,7 @@ Expected: `tsc` typechecks clean and `vite build` succeeds (Tailwind v4 scans so
 - Modify: `package.json` (CLI adds `clsx`, `tailwind-merge`, `class-variance-authority`, `lucide-react`, Radix deps)
 
 **Interfaces:**
+
 - Produces: `cn(...inputs: ClassValue[]): string` in `src/lib/utils.ts`; shadcn primitives in `src/components/ui/*` exported under named components (`Button`, `CardHeader`, `Progress`, `SelectItem`, etc.), all importing `@/lib/utils`.
 
 - [ ] **Step 1: Initialize shadcn**
@@ -161,6 +165,7 @@ Expected: `src/components/ui/button.tsx`, `card.tsx`, `input.tsx`, `label.tsx`, 
 Read `components.json`; verify it contains `"aliases": { "components": "@/components", "utils": "@/lib/utils", "ui": "@/components/ui", ... }` and `"css": "src/index.css"`. If the CLI ran without issue, it is correct by default.
 
 > **Fallback (only if Steps 1–2 cannot run non-interactively):** do it by hand —
+>
 > 1. `pnpm add clsx tailwind-merge class-variance-authority lucide-react`
 > 2. Create `src/lib/utils.ts` with the `cn` helper (see Interface above — canonical two-liner using `clsx` + `twMerge(clsx(inputs))`).
 > 3. Create `components.json` manually (`"$schema": "https://ui.shadcn.com/schema.json", "style": "new-york", "rsc": false, "tsx": true, "tailwind": { "config": "", "css": "src/index.css", "baseColor": "neutral", "cssVariables": true }, "aliases": { "components": "@/components", "utils": "@/lib/utils", "ui": "@/components/ui", "lib": "@/lib", "hooks": "@/hooks" }`).
@@ -176,10 +181,12 @@ Expected: still exits 0 with the new UI files present (they are currently unused
 ### Task 3: PCM decode helper + streaming player
 
 **Files:**
+
 - Create: `src/lib/pcm.ts`
 - Create: `src/lib/streamPlayer.ts`
 
 **Interfaces:**
+
 - Consumes: nothing from earlier tasks (pure TS).
 - Produces:
   - `i16BytesToFloat32(pcm: number[]): Float32Array` in `src/lib/pcm.ts` — takes a little-endian i16 sample array, returns normalized `[-1, 1]` f32 samples.
@@ -274,8 +281,7 @@ export class StreamPlayer {
 
   private drain(): void {
     if (this.stopped) return;
-    const ready =
-      this.lastArrived || this.queuedDuration >= STREAM_START_MILLIS / 1000;
+    const ready = this.lastArrived || this.queuedDuration >= STREAM_START_MILLIS / 1000;
     if (!ready || this.queued.length === 0) return;
     if (!this.started) {
       if (this.ctx!.state === "suspended") void this.ctx!.resume();
@@ -345,9 +351,11 @@ Expected: typechecks clean; the two modules compile (unused by `App.tsx` yet).
 ### Task 4: Rebuild `App.tsx` — streaming playback, metrics, shadcn UI
 
 **Files:**
+
 - Modify: `src/App.tsx`
 
 **Interfaces:**
+
 - Consumes: `StreamPlayer`/`STREAM_START_MILLIS` (Task 3), `i16BytesToFloat32` (indirectly via player), shadcn primitives (Task 2), Tauri `invoke` + `listen`.
 - Produces: the full harness UI.
 
@@ -359,22 +367,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { StreamPlayer } from "@/lib/streamPlayer";
 
@@ -404,16 +401,7 @@ interface TtsErrorPayload {
   message: string;
 }
 
-const STOCK_VOICES = [
-  "alba",
-  "marius",
-  "javert",
-  "jean",
-  "fantine",
-  "cosette",
-  "eponine",
-  "azelma",
-];
+const STOCK_VOICES = ["alba", "marius", "javert", "jean", "fantine", "cosette", "eponine", "azelma"];
 
 type Phase = "idle" | "loading" | "loaded" | "generating" | "done" | "error";
 
@@ -423,9 +411,7 @@ export default function App() {
   const [stockVoice, setStockVoice] = useState("alba");
   const [voiceSpec, setVoiceSpec] = useState("");
   const [voiceId, setVoiceId] = useState<string | null>(null);
-  const [text, setText] = useState(
-    "Hello! This is a test of the built in text to speech engine.",
-  );
+  const [text, setText] = useState("Hello! This is a test of the built in text to speech engine.");
   const [phase, setPhase] = useState<Phase>("idle");
   const [chunkCount, setChunkCount] = useState(0);
   const [streamedSec, setStreamedSec] = useState(0);
@@ -455,16 +441,12 @@ export default function App() {
     (payload: TtsChunkPayload) => {
       if (ttfaRef.current === null) ttfaRef.current = performance.now() - t0Ref.current;
       const player = getPlayer();
-      const buffer = player.decodeChunk(
-        payload.pcm,
-        payload.sampleRate,
-        payload.channels,
-      );
+      const buffer = player.decodeChunk(payload.pcm, payload.sampleRate, payload.channels);
       const dur = player.enqueue(buffer);
       setStreamedSec((s) => s + dur);
       setChunkCount(payload.index + 1);
     },
-    [getPlayer],
+    [getPlayer]
   );
 
   const handleDone = useCallback(
@@ -478,13 +460,12 @@ export default function App() {
       setTotalSec(total);
       setPhase("done");
       const ttfa = ttfaRef.current;
-      const ttfaPart =
-        ttfa !== null ? `${(ttfa / 1000).toFixed(2)} s to first audio · ` : "";
+      const ttfaPart = ttfa !== null ? `${(ttfa / 1000).toFixed(2)} s to first audio · ` : "";
       setStatus(
-        `${ttfaPart}${payload.totalChunks} chunks · ${total.toFixed(2)} s speech · done in ${elapsed.toFixed(2)} s`,
+        `${ttfaPart}${payload.totalChunks} chunks · ${total.toFixed(2)} s speech · done in ${elapsed.toFixed(2)} s`
       );
     },
-    [clearTimer, getPlayer],
+    [clearTimer, getPlayer]
   );
 
   const handleError = useCallback((payload: TtsErrorPayload) => {
@@ -499,17 +480,17 @@ export default function App() {
       unlisteners.push(
         await listen<TtsChunkPayload>("tts://chunk", (e) => {
           if (active) handleChunk(e.payload);
-        }),
+        })
       );
       unlisteners.push(
         await listen<TtsDonePayload>("tts://done", (e) => {
           if (active) handleDone(e.payload);
-        }),
+        })
       );
       unlisteners.push(
         await listen<TtsErrorPayload>("tts://error", (e) => {
           if (active) handleError(e.payload);
-        }),
+        })
       );
     })();
     return () => {
@@ -520,15 +501,13 @@ export default function App() {
 
   async function handleLoadModel() {
     setPhase("loading");
-    setStatus(
-      "Loading model — first run downloads weights from Hugging Face (set HF_TOKEN for the gated repo)…",
-    );
+    setStatus("Loading model — first run downloads weights from Hugging Face (set HF_TOKEN for the gated repo)…");
     try {
       const info = await invoke<TtsLoadResult>("load_tts_model", { variant });
       setModelInfo(info);
       setPhase("loaded");
       setStatus(
-        `Model loaded · ${info.variant} · ${info.sampleRate} Hz · ${info.channels} ch${info.quantized ? " · int8" : ""}`,
+        `Model loaded · ${info.variant} · ${info.sampleRate} Hz · ${info.channels} ch${info.quantized ? " · int8" : ""}`
       );
     } catch (e) {
       setPhase("error");
@@ -545,7 +524,7 @@ export default function App() {
     setStatus(
       spec.startsWith("hf://") || spec.includes("\\") || spec.includes("/")
         ? `Encoding voice ${spec}…`
-        : `Loading stock voice "${spec}"…`,
+        : `Loading stock voice "${spec}"…`
     );
     try {
       const id = await invoke<string>("get_tts_voice_state", { voiceSpec: spec });
@@ -597,11 +576,7 @@ export default function App() {
   const chars = text.length;
   const estTotalSec = Math.max(0.5, chars / 15);
   const progressPct =
-    phase === "done"
-      ? 100
-      : phase === "generating"
-        ? Math.min(99, (streamedSec / estTotalSec) * 100)
-        : 0;
+    phase === "done" ? 100 : phase === "generating" ? Math.min(99, (streamedSec / estTotalSec) * 100) : 0;
 
   const isGenerating = phase === "generating";
 
@@ -610,7 +585,9 @@ export default function App() {
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Local TTS · Test Harness</h1>
         {phase === "generating" && (
-          <Badge variant="secondary" className="animate-pulse">Generating…</Badge>
+          <Badge variant="secondary" className="animate-pulse">
+            Generating…
+          </Badge>
         )}
         {phase === "done" && <Badge>Done</Badge>}
       </header>
@@ -635,7 +612,7 @@ export default function App() {
             </Button>
           </div>
           {modelInfo && (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               {modelInfo.variant} · {modelInfo.sampleRate} Hz · {modelInfo.channels} channel
               {modelInfo.quantized ? " · int8" : ""}
             </p>
@@ -677,7 +654,7 @@ export default function App() {
               Create voice state
             </Button>
           </div>
-          {voiceId && <p className="text-sm text-muted-foreground">voice id: {voiceId}</p>}
+          {voiceId && <p className="text-muted-foreground text-sm">voice id: {voiceId}</p>}
         </CardContent>
       </Card>
 
@@ -688,12 +665,7 @@ export default function App() {
         <CardContent className="flex flex-col gap-3">
           <div className="grid gap-1.5">
             <Label htmlFor="text">Text</Label>
-            <Textarea
-              id="text"
-              value={text}
-              onChange={(e) => setText(e.currentTarget.value)}
-              rows={3}
-            />
+            <Textarea id="text" value={text} onChange={(e) => setText(e.currentTarget.value)} rows={3} />
           </div>
           <div className="flex items-center justify-between gap-3">
             <Badge variant="outline">{chars} chars</Badge>
@@ -710,7 +682,7 @@ export default function App() {
           </div>
           <div className="space-y-1">
             <Progress value={progressPct} className="h-2" />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-muted-foreground text-xs">
               {phase === "generating" && "streaming… "}
               {chunkCount > 0 && `${chunkCount} chunks · `}
               {(streamedSec > 0 || isGenerating) && `${streamedSec.toFixed(2)} s audio · `}
@@ -725,7 +697,7 @@ export default function App() {
           <CardTitle>Status</CardTitle>
         </CardHeader>
         <CardContent>
-          <pre className="whitespace-pre-wrap break-words text-sm">{status || "—"}</pre>
+          <pre className="text-sm break-words whitespace-pre-wrap">{status || "—"}</pre>
         </CardContent>
       </Card>
     </main>
@@ -742,6 +714,7 @@ Expected: exits 0. If a shadcn component import name differs in the generated fi
 
 Run: `pnpm tauri dev --release`
 Then in the app:
+
 1. Load model → Create voice state (alba).
 2. Generate the default sentence with the default longer text.
    - **Expected:** first audible audio starts within ~0.35 s of generation start; speech plays continuously while `chunks`/`s audio` count up; no stutter between chunks; the "Generating…" pulse badge shows; at `done` the badge flips to "Done" and the status shows `N chunks · M.NN s speech · done in K.KK s` plus time-to-first-audio.
@@ -754,6 +727,7 @@ Then in the app:
 ### Task 5: Cleanup and final sweep
 
 **Files:**
+
 - Audit: `src/App.css` (must be absent from Task 1 onward), stale references to `App.css`, any leftover unused imports (`STREAM_START_MILLIS`, `i16BytesToFloat32` are intentionally not imported — adjust per Task 4 final code if `tsc` flags `noUnusedLocals`).
 
 **Interfaces:** none (housekeeping).

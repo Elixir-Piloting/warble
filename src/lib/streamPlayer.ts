@@ -152,7 +152,11 @@ export class StreamPlayer {
     this.positionBase = this.wallPosition;
     this.userPaused = true;
     for (const source of this.active) {
-      try { source.stop(); } catch { /* already ended */ }
+      try {
+        source.stop();
+      } catch {
+        /* already ended */
+      }
     }
     this.active.clear();
     this.started = false;

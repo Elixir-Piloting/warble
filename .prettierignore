@@ -1,0 +1,8 @@
+# Tauri artifacts (Rust formatting is handled by cargo fmt)
+src-tauri/target/
+src-tauri/gen/
+src-tauri/*.log
+
+# Build output
+dist/
+node_modules/

@@ -10,11 +10,7 @@ export function i16BytesToFloat32(pcm: number[]): Float32Array {
 }
 
 /** Concatenate AudioBuffers into a 16-bit PCM WAV Blob for download. */
-export function audioBuffersToWavBlob(
-  buffers: AudioBuffer[],
-  sampleRate: number,
-  channels: number,
-): Blob {
+export function audioBuffersToWavBlob(buffers: AudioBuffer[], sampleRate: number, channels: number): Blob {
   const frames = buffers.reduce((n, b) => n + b.length, 0);
   const pcm = new Int16Array(frames * channels);
   let off = 0;
