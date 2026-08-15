@@ -75,6 +75,7 @@ interface TtsWorkspaceProps {
   generatedAudioSrc: string | null;
   onReplay: (record: HistoryRecord) => void;
   onDownload: (record: HistoryRecord) => void;
+  onDownloadClip: (entry: HistoryEntry) => void;
   onEdit: (record: HistoryRecord) => void;
   onDeleteHistory: (record: HistoryRecord) => void;
   generationSettings: GenerationSettings;
@@ -83,23 +84,6 @@ interface TtsWorkspaceProps {
   onReloadModel: () => void;
   onResetGenerationSettings: () => void;
   onInsertPause: () => void;
-}
-
-function historyRecordFromEntry(entry: HistoryEntry): HistoryRecord {
-  return {
-    id: entry.id,
-    name: entry.name,
-    text: "",
-    createdAt: entry.createdAt,
-    charCount: entry.charCount,
-    chunkCount: entry.chunkCount,
-    speechSec: entry.speechSec,
-    elapsedSec: entry.elapsedSec,
-    sampleRate: entry.sampleRate,
-    channels: entry.channels,
-    wavPath: "",
-    voiceLabel: null,
-  };
 }
 
 export function TtsWorkspace(props: TtsWorkspaceProps) {
@@ -162,7 +146,7 @@ export function TtsWorkspace(props: TtsWorkspaceProps) {
               <GeneratedAudioPlayer
                 clip={props.currentClip!}
                 src={props.generatedAudioSrc!}
-                onDownload={(entry) => props.onDownload(historyRecordFromEntry(entry))}
+                onDownload={props.onDownloadClip}
               />
             )}
           </main>

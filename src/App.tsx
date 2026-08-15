@@ -225,6 +225,7 @@ export default function App() {
     try {
       const id = await invoke<string>("get_tts_voice_state", { voiceSpec: spec });
       setVoiceId(id);
+      setSelectedCustomVoice(null);
       setStockVoice(spec);
       setPhase("loaded");
       setStatus(`${spec} is ready`);
@@ -383,6 +384,22 @@ export default function App() {
       setStatus(String(error));
     }
   }
+  async function downloadClip(entry: HistoryEntry) {
+    try {
+      const blob = audioBuffersToWavBlob(entry.buffers, entry.sampleRate, entry.channels);
+      const path = await save({
+        defaultPath: `warble-${entry.id}.wav`,
+        filters: [{ name: "WAV audio", extensions: ["wav"] }],
+      });
+      if (path) {
+        await writeFile(path, new Uint8Array(await blob.arrayBuffer()));
+        setStatus(`Saved ${path}`);
+      }
+    } catch (error) {
+      setPhase("error");
+      setStatus(String(error));
+    }
+  }
   useEffect(() => {
     if (!currentClip) {
       setGeneratedAudioSrc(null);
@@ -445,6 +462,7 @@ export default function App() {
         generatedAudioSrc={generatedAudioSrc}
         onReplay={(record) => void replay(record)}
         onDownload={(record) => void download(record)}
+        onDownloadClip={(entry) => void downloadClip(entry)}
         onEdit={(record) => void handleEdit(record)}
         onDeleteHistory={(record) => void handleDeleteHistory(record)}
         generationSettings={generationSettings}
