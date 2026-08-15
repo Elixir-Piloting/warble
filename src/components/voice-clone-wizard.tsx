@@ -228,9 +228,9 @@ export function VoiceCloneWizard({ open, onOpenChange, onCloned }: VoiceCloneWiz
             </div>
             <Button variant="outline" size="sm" onClick={() => void togglePreview()}>
               {player.isItemActive(`preview-${cloned.embeddingsPath}`) && player.isPlaying ? (
-                <Pause className="size-4" /> 
+                <Pause className="size-4" />
               ) : (
-                <Play className="size-4" /> 
+                <Play className="size-4" />
               )}
               {player.isItemActive(`preview-${cloned.embeddingsPath}`) && player.isPlaying
                 ? "Pause preview"

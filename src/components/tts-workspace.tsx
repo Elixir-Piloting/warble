@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, Download, FileAudio, Gauge, History, LoaderCircle, Pause, Play, Search, Sparkles, Square } from "lucide-react";
 import {
   AudioPlayerButton,
@@ -193,19 +193,27 @@ function GeneratedAudioPlayer({
   const player = useAudioPlayer<{ kind: "preview"; name: string }>();
   const active = player.activeItem;
   const preview = active && active.data?.kind === "preview" ? active : null;
-  const showClip = !preview && clip != null && src != null;
-  if (!preview && !showClip) return null;
+  const showClip = clip != null && src != null;
 
-  const item: AudioPlayerItem<unknown> = preview
+  useEffect(() => {
+    if (showClip && player.activeItem?.id !== clip!.id) {
+      void player.setActiveItem({ id: clip!.id, src: src! });
+    }
+  }, [showClip, clip?.id, src, player]);
+
+  if (!preview && !showClip) return null;
+  const isPreview = preview != null && !showClip;
+
+  const item: AudioPlayerItem<unknown> = isPreview
     ? (active as AudioPlayerItem<{ kind: "preview"; name: string }>)
     : { id: clip!.id, src: src! };
 
   return (
     <footer className="border-border bg-background flex min-h-20 shrink-0 items-center gap-5 border-t px-5 py-3">
       <div className="min-w-0 flex-1 basis-0">
-        <p className="truncate text-sm font-medium">{preview ? preview.data!.name : clip!.name}</p>
+        <p className="truncate text-sm font-medium">{isPreview ? preview!.data!.name : clip!.name}</p>
         <p className="text-muted-foreground mt-1 text-xs">
-          {preview ? "Voice preview" : `Local voice · ${clip!.speechSec.toFixed(2)} seconds`}
+          {isPreview ? "Voice preview" : `Local voice · ${clip!.speechSec.toFixed(2)} seconds`}
         </p>
       </div>
       <div className="flex w-full max-w-xl items-center gap-3">
@@ -215,7 +223,7 @@ function GeneratedAudioPlayer({
         <AudioPlayerDuration />
         <AudioPlayerSpeed size="icon-sm" />
       </div>
-      {!preview && (
+      {!isPreview && (
         <div className="flex flex-1 basis-0 justify-end">
           <Button variant="ghost" size="icon-sm" onClick={() => onDownload(clip!)} aria-label="Download WAV">
             <Download />
