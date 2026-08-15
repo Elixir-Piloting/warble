@@ -452,7 +452,7 @@ Expected: exit 0, "built in" line.
 Run `pnpm dev`:
 1. Settings → Voice shows the current-voice button (orb + name + subtitle).
 2. Click it → panel swaps to the browser with Pre-built / My voices tabs; Settings/History tab strip stays visible.
-3. Pre-built: search filters stock voices; selecting one loads it, shows checkmark briefly, and auto-returns to Settings.
+3. Pre-built: search filters stock voices; selecting one loads it and auto-returns to Settings (the checkmark on the active stock voice is visible when reopening the browser — auto-return closes the panel synchronously, so it does not flash on selection).
 4. My voices: "Clone a voice" opens the clone wizard; selecting a clone auto-returns; rename/delete work inline.
 5. Back button returns to Settings without changing the voice.
 6. Voice memory still auto-loads the last voice on launch.
