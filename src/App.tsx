@@ -511,8 +511,8 @@ async function decodeHistoryAudio(record: HistoryRecord): Promise<HistoryEntry> 
     chunkCount: record.chunkCount ?? 0,
     speechSec: record.speechSec ?? 0,
     elapsedSec: record.elapsedSec ?? 0,
-    sampleRate: record.sampleRate ?? decoded.sampleRate,
-    channels: record.channels ?? decoded.numberOfChannels,
+    sampleRate: decoded.sampleRate,
+    channels: decoded.numberOfChannels,
     buffers: [decoded],
   };
 }
