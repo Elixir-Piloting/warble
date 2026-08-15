@@ -86,6 +86,13 @@ export function VoiceCloneWizard({ open, onOpenChange, onCloned }: VoiceCloneWiz
     setSourceUrl(null);
   }
 
+  /** Blob URL for preview playback. The MIME type matters: WebView2's media
+   * stack can reject typeless blob URLs, and every working audio path in the
+   * app ships an `audio/wav`-typed blob. */
+  function wavPreviewUrl(bytes: Uint8Array): string {
+    return URL.createObjectURL(new Blob([bytes as BlobPart], { type: "audio/wav" }));
+  }
+
   function stopRecording() {
     if (mediaRef.current && mediaRef.current.state !== "inactive") {
       mediaRef.current.stop();
@@ -109,7 +116,7 @@ export function VoiceCloneWizard({ open, onOpenChange, onCloned }: VoiceCloneWiz
       const bytes = await fileToWavBytes(path);
       setSourceName(path.split(/[\\/]/).pop() ?? path);
       setSourceType("file");
-      setSourcePreview(URL.createObjectURL(new Blob([bytes as BlobPart])));
+      setSourcePreview(wavPreviewUrl(bytes));
       setWavBytes(bytes);
       setError(null);
     } catch (err) {
@@ -137,7 +144,7 @@ export function VoiceCloneWizard({ open, onOpenChange, onCloned }: VoiceCloneWiz
           const bytes = await blobToWavBytes(blob);
           setSourceName("Microphone recording");
           setSourceType("recording");
-          setSourcePreview(URL.createObjectURL(new Blob([bytes as BlobPart])));
+          setSourcePreview(wavPreviewUrl(bytes));
           setWavBytes(bytes);
           setError(null);
         } catch (err) {
@@ -160,7 +167,7 @@ export function VoiceCloneWizard({ open, onOpenChange, onCloned }: VoiceCloneWiz
     const audio = audioRef.current;
     if (!audio) return;
     if (audio.paused) {
-      void audio.play();
+      audio.play().catch((err) => setError(`Could not play preview: ${String(err)}`));
     } else {
       audio.pause();
     }
@@ -249,7 +256,12 @@ export function VoiceCloneWizard({ open, onOpenChange, onCloned }: VoiceCloneWiz
 
             {sourceName && (
               <div className="flex items-center gap-3">
-                <audio ref={audioRef} src={sourceUrl ?? undefined} className="hidden" />
+                <audio
+                  ref={audioRef}
+                  src={sourceUrl ?? undefined}
+                  className="hidden"
+                  onError={() => setError("Preview audio could not be loaded")}
+                />
                 <Button variant="outline" size="icon" onClick={togglePreview} aria-label="Preview source audio">
                   <Play className="size-4" />
                 </Button>
