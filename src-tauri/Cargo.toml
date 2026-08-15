@@ -78,6 +78,7 @@ serde_json = "1"
 # "mkl" links Intel oneMKL for fast CPU GEMM (x86/x86_64).
 pocket-tts = { path = "crates/pocket-tts", features = ["quantized", "mkl"] }
 candle-core.workspace = true
+rusqlite = { version = "0.37", features = ["bundled"] }
 
 # Override crates.io intel-mkl-src for ALL dependents (incl. candle-core /
 # candle-nn, which hard-require the iomp variant) with our fork that always
