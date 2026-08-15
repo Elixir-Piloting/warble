@@ -103,6 +103,7 @@ export default function App() {
   const historyIdRef = useRef(0);
   const lastMetaRef = useRef<Pick<HistoryEntry, "sampleRate" | "channels"> | null>(null);
   const autoLoadedVoiceRef = useRef(false);
+  const voiceLoadSeqRef = useRef(0);
   const getPlayer = useCallback(() => playerRef.current ?? (playerRef.current = new StreamPlayer()), []);
   const refreshVoices = useCallback(async () => {
     try {
@@ -216,6 +217,8 @@ export default function App() {
     void loadModel(DEFAULT_GENERATION_SETTINGS);
   }, [loadModel]);
 
+  // Deps are [modelInfo] only: the auto-load always passes explicit specs, the referenced functions are
+  // stable-in-effect, and there is no exhaustive-deps lint in this project.
   useEffect(() => {
     if (!modelInfo || autoLoadedVoiceRef.current) return;
     autoLoadedVoiceRef.current = true;
@@ -239,10 +242,12 @@ export default function App() {
       setStatus("The model is still loading.");
       return;
     }
+    const seq = ++voiceLoadSeqRef.current;
     setPhase("loading");
     setStatus(`Loading ${spec}…`);
     try {
       const id = await invoke<string>("get_tts_voice_state", { voiceSpec: spec });
+      if (seq !== voiceLoadSeqRef.current) return;
       setVoiceId(id);
       setSelectedCustomVoice(null);
       setStockVoice(spec);
@@ -261,9 +266,11 @@ export default function App() {
       setStatus("The model is still loading.");
       return;
     }
+    const seq = ++voiceLoadSeqRef.current;
     try {
       const record = await getCustomVoice(id);
       const voiceId = await invoke<string>("get_tts_voice_state", { voiceSpec: record.embeddingsPath });
+      if (seq !== voiceLoadSeqRef.current) return;
       setVoiceId(voiceId);
       setSelectedCustomVoice(record);
       setPhase("loaded");
@@ -520,6 +527,7 @@ function readLastVoice(): LastVoice | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as LastVoice;
     if (parsed.kind !== "stock" && parsed.kind !== "custom") return null;
+    if (typeof parsed.spec !== "string" || parsed.spec.length === 0) return null;
     return parsed;
   } catch {
     return null;
