@@ -61,7 +61,7 @@ interface HistoryEntry {
   channels: number;
   buffers: AudioBuffer[];
 }
-type Phase = "idle" | "loading" | "loaded" | "generating" | "done" | "error";
+type Phase = "idle" | "loading" | "loaded" | "generating" | "stopping" | "done" | "error";
 const DEFAULT_GENERATION_SETTINGS: GenerationSettings = {
   temperature: 0.7,
   lsdDecodeSteps: 1,
@@ -100,6 +100,7 @@ export default function App() {
   const streamIdRef = useRef(0);
   const activeGenRef = useRef(0);
   const timerRef = useRef<number | null>(null);
+  const wasStoppingRef = useRef(false);
   const historyIdRef = useRef(0);
   const lastMetaRef = useRef<Pick<HistoryEntry, "sampleRate" | "channels"> | null>(null);
   const getPlayer = useCallback(() => playerRef.current ?? (playerRef.current = new StreamPlayer()), []);
@@ -173,7 +174,7 @@ export default function App() {
       setCurrentClip(entry);
       setStreamPlaying(false);
     },
-    [clearTimer, getPlayer]
+    [clearTimer, getPlayer, refreshHistory]
   );
 
   const handleError = useCallback((payload: TtsErrorPayload) => {
@@ -335,6 +336,12 @@ export default function App() {
       clearTimer();
       setPhase("error");
       setStatus(String(error));
+    } finally {
+      if (wasStoppingRef.current) {
+        wasStoppingRef.current = false;
+        setPhase("idle");
+        setStatus("Generation stopped");
+      }
     }
   }
 
@@ -343,11 +350,12 @@ export default function App() {
     getPlayer().stop();
     buffersRef.current = [];
     clearTimer();
-    setPhase("idle");
+    wasStoppingRef.current = true;
+    setPhase("stopping");
     setChunkCount(0);
     setStreamedSec(0);
     setStreamPlaying(false);
-    setStatus("Generation stopped");
+    setStatus("Stopping generation…");
     void invoke("cancel_generation");
   }
   function toggleStreamPlayback() {
@@ -414,7 +422,7 @@ export default function App() {
     return () => URL.revokeObjectURL(url);
   }, [currentClip]);
 
-  const generating = phase === "generating";
+  const generating = phase === "generating" || phase === "stopping";
   const loading = phase === "loading";
   const progress = generating
     ? Math.min(99, (streamedSec / Math.max(0.5, text.length / 15)) * 100)

@@ -93,7 +93,7 @@ export function VoicePickerDialog({
                 disabled={loading}
                 className={`hover:border-primary/60 hover:bg-accent flex items-center gap-3 rounded-xl border p-3 text-left transition-colors ${selectedId === voice.id && !selectedCustomVoiceId && hasVoice ? "border-primary/60 bg-accent" : "border-border"}`}
               >
-                <VoiceOrb active={selectedId === voice.id && hasVoice} />
+                <VoiceOrb active={selectedId === voice.id && hasVoice && !selectedCustomVoiceId} />
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium">{voice.name}</span>
                   <span className="text-muted-foreground mt-1 block truncate text-xs">{voice.description}</span>

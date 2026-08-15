@@ -13,7 +13,7 @@ export async function blobToWavBytes(blob: Blob): Promise<Uint8Array> {
     );
     return new Uint8Array(await wavBlob.arrayBuffer());
   } finally {
-    void ctx.close();
+    await ctx.close().catch(() => {});
   }
 }
 
