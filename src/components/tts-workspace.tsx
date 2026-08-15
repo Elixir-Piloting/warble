@@ -92,82 +92,84 @@ export function TtsWorkspace(props: TtsWorkspaceProps) {
   return (
     <TooltipProvider>
       <div className="bg-background text-foreground h-screen overflow-hidden">
-        <div className="grid h-full min-h-0 lg:grid-cols-[minmax(0,1fr)_460px]">
-          <main className="border-border grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] border-r">
-            <section className="min-h-0 overflow-y-auto">
-              <div className="mx-auto flex h-full w-full max-w-5xl flex-col px-8 py-16 lg:px-16">
-                <Textarea
-                  value={props.text}
-                  onChange={(event) => props.onTextChange(event.currentTarget.value)}
-                  className="field-sizing-fixed min-h-[420px] flex-1 resize-none overflow-y-auto border-0 bg-transparent p-0 text-lg leading-8 shadow-none focus-visible:ring-0 md:text-xl"
-                  placeholder="Write something to say…"
-                />
-                {props.generating && (
-                  <LiveStreamBar
-                    streamPlaying={props.streamPlaying}
-                    elapsedSec={props.elapsedSec}
-                    progress={props.progress}
-                    onToggleStreamPlayback={props.onToggleStreamPlayback}
+        <div className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto]">
+          <div className="grid h-full min-h-0 lg:grid-cols-[minmax(0,1fr)_460px]">
+            <main className="border-border min-h-0 min-w-0 overflow-hidden border-r">
+              <section className="h-full min-h-0 overflow-y-auto">
+                <div className="mx-auto flex h-full w-full max-w-5xl flex-col px-8 py-16 lg:px-16">
+                  <Textarea
+                    value={props.text}
+                    onChange={(event) => props.onTextChange(event.currentTarget.value)}
+                    className="field-sizing-fixed min-h-[420px] flex-1 resize-none overflow-y-auto border-0 bg-transparent p-0 text-lg leading-8 shadow-none focus-visible:ring-0 md:text-xl"
+                    placeholder="Write something to say…"
                   />
-                )}
-                <div className="mt-8 flex shrink-0 flex-wrap items-center justify-between gap-3">
-                  <Button variant="ghost" size="sm" onClick={props.onInsertPause}>
-                    Insert pause
-                  </Button>
-                  <div className="flex items-center gap-2">
-                    <Button onClick={props.onGenerate} disabled={props.generating || props.loading}>
-                      {props.generating ? (
-                        <>
-                          <LoaderCircle className="animate-spin" /> Generating
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles /> Generate speech
-                        </>
-                      )}
+                  {props.generating && (
+                    <LiveStreamBar
+                      streamPlaying={props.streamPlaying}
+                      elapsedSec={props.elapsedSec}
+                      progress={props.progress}
+                      onToggleStreamPlayback={props.onToggleStreamPlayback}
+                    />
+                  )}
+                  <div className="mt-8 flex shrink-0 flex-wrap items-center justify-between gap-3">
+                    <Button variant="ghost" size="sm" onClick={props.onInsertPause}>
+                      Insert pause
                     </Button>
-                    {props.generating && (
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        onClick={props.onStopGeneration}
-                        aria-label="Stop generation"
-                      >
-                        <Square />
+                    <div className="flex items-center gap-2">
+                      <Button onClick={props.onGenerate} disabled={props.generating || props.loading}>
+                        {props.generating ? (
+                          <>
+                            <LoaderCircle className="animate-spin" /> Generating
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles /> Generate speech
+                          </>
+                        )}
                       </Button>
-                    )}
+                      {props.generating && (
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={props.onStopGeneration}
+                          aria-label="Stop generation"
+                        >
+                          <Square />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
+              </section>
+            </main>
+            <aside className="min-h-0 overflow-hidden">
+              {" "}
+              <div className="flex h-full min-h-0 flex-col">
+                <div className="border-border flex shrink-0 gap-5 border-b px-5 pt-4">
+                  <TabButton active={rightTab === "settings"} onClick={() => setRightTab("settings")}>
+                    Settings
+                  </TabButton>
+                  <TabButton active={rightTab === "history"} onClick={() => setRightTab("history")}>
+                    History
+                  </TabButton>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  {rightTab === "settings" ? (
+                    <SettingsPanel {...props} selectedVoice={selectedVoice} />
+                  ) : (
+                    <HistoryPanel {...props} />
+                  )}
+                </div>
               </div>
-            </section>
-            {showTransport && (
-              <GeneratedAudioPlayer
-                clip={props.currentClip!}
-                src={props.generatedAudioSrc!}
-                onDownload={props.onDownloadClip}
-              />
-            )}
-          </main>
-          <aside className="min-h-0 overflow-hidden">
-            {" "}
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="border-border flex shrink-0 gap-5 border-b px-5 pt-4">
-                <TabButton active={rightTab === "settings"} onClick={() => setRightTab("settings")}>
-                  Settings
-                </TabButton>
-                <TabButton active={rightTab === "history"} onClick={() => setRightTab("history")}>
-                  History
-                </TabButton>
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                {rightTab === "settings" ? (
-                  <SettingsPanel {...props} selectedVoice={selectedVoice} />
-                ) : (
-                  <HistoryPanel {...props} />
-                )}
-              </div>
-            </div>
-          </aside>
+            </aside>
+          </div>
+          {showTransport && (
+            <GeneratedAudioPlayer
+              clip={props.currentClip!}
+              src={props.generatedAudioSrc!}
+              onDownload={props.onDownloadClip}
+            />
+          )}
         </div>
       </div>
     </TooltipProvider>
