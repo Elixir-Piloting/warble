@@ -29,7 +29,7 @@ const EVENT_PREFIX: &str = "tts://";
 /// Shared engine state managed by Tauri.
 #[derive(Default)]
 pub struct TtsState {
-    model: Mutex<Option<TTSModel>>,
+    pub(crate) model: Mutex<Option<TTSModel>>,
     voices: Mutex<HashMap<String, ModelState>>,
 }
 

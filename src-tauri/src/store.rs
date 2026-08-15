@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 
 use rusqlite::Connection;
 use serde::Serialize;
+use tauri::State;
 
 /// Shared, cloneable store handle used by commands and blocking tasks.
 #[derive(Clone)]
@@ -379,6 +380,128 @@ CREATE TABLE IF NOT EXISTS history (
   voice_label  TEXT
 );
 "#;
+
+// ---- voice Tauri commands ----
+
+#[tauri::command]
+pub fn list_custom_voices(store: State<'_, Store>) -> Result<Vec<VoiceRecord>, String> {
+    store.list_voices()
+}
+
+#[tauri::command]
+pub fn get_custom_voice(store: State<'_, Store>, id: i64) -> Result<VoiceRecord, String> {
+    store.get_voice(id)?.ok_or_else(|| format!("unknown voice id: {id}"))
+}
+
+#[tauri::command]
+pub fn rename_custom_voice(store: State<'_, Store>, id: i64, name: String) -> Result<(), String> {
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err("voice name cannot be empty".to_string());
+    }
+    store.rename_voice(id, &name)
+}
+
+#[tauri::command]
+pub fn delete_custom_voice(store: State<'_, Store>, id: i64) -> Result<(), String> {
+    let rec = store.delete_voice(id)?;
+    let _ = std::fs::remove_dir_all(store.voice_dir(rec.id));
+    Ok(())
+}
+
+/// Clone a voice from WAV bytes: encodes speaker embeddings via the loaded
+/// model, stages files in a temp dir, then atomically moves them into
+/// `voices/<id>/` and records the row.
+#[tauri::command]
+pub async fn clone_voice(
+    tts: State<'_, crate::tts::TtsState>,
+    store: State<'_, Store>,
+    name: String,
+    wav_bytes: Vec<u8>,
+    source: String,
+) -> Result<VoiceRecord, String> {
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err("voice name cannot be empty".to_string());
+    }
+    let source = if source == "recording" { "recording" } else { "file" }.to_string();
+
+    let model = tts
+        .model
+        .lock()
+        .map_err(|_| "model lock poisoned".to_string())?
+        .as_ref()
+        .ok_or("no model loaded; call load_tts_model first")?
+        .clone();
+    let store = store.inner().clone();
+    let store_for_task = store.clone();
+
+    let id = tauri::async_runtime::spawn_blocking(move || -> Result<i64, String> {
+        let store = store_for_task;
+        let id = store.insert_voice(&name, &source)?;
+
+        let cleanup = |id: i64, dir: &Path| {
+            let _ = store.delete_voice(id);
+            let _ = std::fs::remove_dir_all(dir);
+        };
+
+        let voices_root = store.data_dir().join("voices");
+        std::fs::create_dir_all(&voices_root).map_err(|e| e.to_string())?;
+        let tmp_dir = voices_root.join(format!(".tmp-{id}"));
+        std::fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
+
+        let wav_path = tmp_dir.join("source.wav");
+        if let Err(e) = std::fs::write(&wav_path, &wav_bytes) {
+            cleanup(id, &tmp_dir);
+            return Err(format!("failed to write source audio: {e}"));
+        }
+
+        let prompt = match model.encode_voice_prompt_from_bytes(&wav_bytes) {
+            Ok(p) => p,
+            Err(e) => {
+                cleanup(id, &tmp_dir);
+                return Err(format!("voice cloning failed: {e}"));
+            }
+        };
+        let mut tensors = HashMap::new();
+        tensors.insert("audio_prompt".to_string(), prompt);
+        let safetensors_path = tmp_dir.join("embeddings.safetensors");
+        if let Err(e) = candle_core::safetensors::save(&tensors, &safetensors_path) {
+            cleanup(id, &tmp_dir);
+            return Err(format!("failed to write embeddings: {e}"));
+        }
+
+        let (audio, sample_rate) = match pocket_tts::audio::read_wav_from_bytes(&wav_bytes) {
+            Ok(v) => v,
+            Err(e) => {
+                cleanup(id, &tmp_dir);
+                return Err(format!("failed to parse wav: {e}"));
+            }
+        };
+        let num_samples = audio.dims()[1] as f64;
+        let duration_sec = num_samples / sample_rate as f64;
+
+        let final_dir = store.voice_dir(id);
+        if let Err(e) = std::fs::rename(&tmp_dir, &final_dir) {
+            cleanup(id, &tmp_dir);
+            return Err(format!("failed to finalize voice files: {e}"));
+        }
+
+        store.set_voice_files(
+            id,
+            &final_dir.join("source.wav"),
+            &final_dir.join("embeddings.safetensors"),
+            Some(duration_sec),
+            Some(sample_rate as i64),
+        )?;
+
+        Ok(id)
+    })
+    .await
+    .map_err(|e| format!("clone task panicked: {e}"))??;
+
+    store.get_voice(id)?.ok_or_else(|| "voice disappeared after insert".to_string())
+}
 
 #[cfg(test)]
 mod tests {
