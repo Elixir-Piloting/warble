@@ -292,7 +292,7 @@ pub fn write_wav_file(path: &Path, pcm: &[u8], sample_rate: u32, channels: u16) 
     use std::io::Write;
     let data_size = pcm.len() as u32;
     let byte_rate = sample_rate * channels as u32 * 2;
-    let block_align = channels as u32 * 2;
+    let block_align = channels as u16 * 2;
     let mut f = std::fs::File::create(path).map_err(|e| e.to_string())?;
     f.write_all(b"RIFF").map_err(|e| e.to_string())?;
     f.write_all(&(36 + data_size).to_le_bytes()).map_err(|e| e.to_string())?;
@@ -587,5 +587,40 @@ mod tests {
         let deleted = store.delete_history(id).unwrap();
         assert_eq!(deleted.wav_path, "/h/1.wav");
         assert!(store.get_history(id).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_write_wav_file_roundtrip() {
+        let dir = std::env::temp_dir().join(format!("warble-store-wav-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create test dir");
+        let path = dir.join("test.wav");
+        // 2 channels x 4 frames, i16 interleaved little-endian.
+        let pcm: Vec<u8> = vec![0xff, 0xff, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8, 0];
+        let sample_rate = 24000u32;
+        let channels = 2u16;
+        write_wav_file(&path, &pcm, sample_rate, channels).expect("write wav");
+
+        let bytes = std::fs::read(&path).expect("read wav back");
+        assert_eq!(&bytes[0..4], b"RIFF");
+        assert_eq!(&bytes[8..12], b"WAVE");
+        assert_eq!(&bytes[12..16], b"fmt ");
+        assert_eq!(&bytes[36..40], b"data");
+
+        let riff_size = u32::from_le_bytes(bytes[4..8].try_into().unwrap());
+        let data_size = u32::from_le_bytes(bytes[40..44].try_into().unwrap());
+        let sr = u32::from_le_bytes(bytes[24..28].try_into().unwrap());
+        let byte_rate = u32::from_le_bytes(bytes[28..32].try_into().unwrap());
+        let block_align = u16::from_le_bytes(bytes[32..34].try_into().unwrap());
+        let bits = u16::from_le_bytes(bytes[34..36].try_into().unwrap());
+
+        assert_eq!(riff_size, 36 + data_size);
+        assert_eq!(data_size, pcm.len() as u32);
+        assert_eq!(sr, sample_rate);
+        assert_eq!(byte_rate, sample_rate * channels as u32 * 2);
+        assert_eq!(block_align, channels * 2);
+        assert_eq!(bits, 16);
+        assert_eq!(&bytes[44..], pcm.as_slice());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
