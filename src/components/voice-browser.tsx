@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, Check, Mic, Pencil, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, Mic, Pause, Pencil, Play, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAudioPlayer } from "@/components/ui/audio-player";
+import { getVoicePreviewUrl } from "@/lib/preview";
 import { STOCK_VOICES } from "@/components/voice-data";
 import { VoiceOrb } from "@/components/voice-orb";
 import type { VoiceRecord } from "@/lib/api";
@@ -49,6 +51,8 @@ export function VoiceBrowser({
   const [tab, setTab] = useState<"prebuilt" | "mine">("prebuilt");
   const [query, setQuery] = useState("");
 
+  const player = useAudioPlayer();
+
   const voices = useMemo(
     () =>
       STOCK_VOICES.filter((voice) =>
@@ -56,6 +60,16 @@ export function VoiceBrowser({
       ),
     [query]
   );
+
+  async function togglePreview(spec: string, name: string) {
+    const id = `preview-${spec}`;
+    if (player.isItemActive(id) && player.isPlaying) {
+      player.pause();
+      return;
+    }
+    const url = await getVoicePreviewUrl(spec);
+    if (url) void player.play({ id, src: url, data: { kind: "preview", name } });
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -91,20 +105,39 @@ export function VoiceBrowser({
               <div className="flex flex-col gap-2">
                 {voices.map((voice) => {
                   const active = voiceId != null && selectedCustomVoiceId == null && stockVoice === voice.id;
+                  const previewId = `preview-${voice.id}`;
+                  const previewPlaying = player.isItemActive(previewId) && player.isPlaying;
                   return (
-                    <button
+                    <div
                       key={voice.id}
-                      onClick={() => onLoadVoice(voice.id)}
-                      disabled={loading}
-                      className={`hover:border-primary/60 hover:bg-accent flex items-center gap-3 rounded-xl border p-3 text-left transition-colors ${active ? "border-primary/60 bg-accent" : "border-border"}`}
+                      className={`hover:border-primary/60 hover:bg-accent flex items-center gap-3 rounded-xl border p-3 transition-colors ${active ? "border-primary/60 bg-accent" : "border-border"}`}
                     >
-                      <VoiceOrb active={active} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block font-medium">{voice.name}</span>
-                        <span className="text-muted-foreground mt-0.5 block truncate text-xs">{voice.description}</span>
-                      </span>
-                      {active && <Check className="text-primary" />}
-                    </button>
+                      <button
+                        onClick={() => onLoadVoice(voice.id)}
+                        disabled={loading}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                      >
+                        <VoiceOrb active={active} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-medium">{voice.name}</span>
+                          <span className="text-muted-foreground mt-0.5 block truncate text-xs">{voice.description}</span>
+                        </span>
+                      </button>
+                      {active && <Check className="text-primary shrink-0" />}
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void togglePreview(voice.id, voice.name);
+                        }}
+                        disabled={loading}
+                        className="text-muted-foreground hover:text-foreground shrink-0 rounded-md p-2"
+                        aria-label={previewPlaying ? `Pause ${voice.name} preview` : `Play ${voice.name} preview`}
+                      >
+                        {previewPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -125,20 +158,43 @@ export function VoiceBrowser({
                   const active = selectedCustomVoiceId === voice.id;
                   return (
                     <div key={voice.id} className={`flex items-center gap-3 px-4 py-3 ${active ? "bg-accent" : ""}`}>
-                      <button
-                        onClick={() => onSelectCustomVoice(voice.id)}
-                        disabled={loading}
-                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                      >
-                        <VoiceOrb active={active} />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">{voice.name}</span>
-                          <span className="text-muted-foreground mt-0.5 block truncate text-xs">
-                            {voice.source === "recording" ? "Recording" : "File"} · {(voice.durationSec ?? 0).toFixed(1)}s
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        <button
+                          onClick={() => onSelectCustomVoice(voice.id)}
+                          disabled={loading}
+                          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                        >
+                          <VoiceOrb active={active} />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">{voice.name}</span>
+                            <span className="text-muted-foreground mt-0.5 block truncate text-xs">
+                              {voice.source === "recording" ? "Recording" : "File"} · {(voice.durationSec ?? 0).toFixed(1)}s
+                            </span>
                           </span>
-                        </span>
-                        {active && <Check className="text-primary" />}
-                      </button>
+                        </button>
+                        {active && <Check className="text-primary shrink-0" />}
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void togglePreview(voice.embeddingsPath, voice.name);
+                          }}
+                          disabled={loading}
+                          className="text-muted-foreground hover:text-foreground shrink-0 rounded-md p-2"
+                          aria-label={
+                            player.isItemActive(`preview-${voice.embeddingsPath}`) && player.isPlaying
+                              ? `Pause ${voice.name} preview`
+                              : `Play ${voice.name} preview`
+                          }
+                        >
+                          {player.isItemActive(`preview-${voice.embeddingsPath}`) && player.isPlaying ? (
+                            <Pause className="size-4" />
+                          ) : (
+                            <Play className="size-4" />
+                          )}
+                        </button>
+                      </div>
                       <button
                         onClick={() => {
                           const next = window.prompt("Rename voice", voice.name);
