@@ -427,6 +427,11 @@ Remove these two props from the `<TtsWorkspace ... />` call (currently lines 482
         onVoiceOpenChange={setVoiceOpen}
 ```
 
+NOTE (discovered during implementation — the original brief missed these): `setVoiceOpen` is referenced in three more places that must be removed too, or `tsc` fails with `Cannot find name 'setVoiceOpen'`:
+- `loadVoice` (~line 257): delete `setVoiceOpen(false);`
+- `loadCustomVoice` (~line 279): delete `setVoiceOpen(false);`
+- `generate()` (~line 338): delete `setVoiceOpen(true);` but KEEP `setStatus("Choose a voice to continue.");` — there is no dialog anymore, so the guard just blocks generation with a status hint.
+
 - [ ] **Step 5: Delete the old components**
 
 ```bash
