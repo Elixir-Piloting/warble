@@ -399,7 +399,10 @@ fn test_voice_prompt_roundtrip() {
         return;
     }
     let model = get_model();
-    let bytes = std::fs::read(get_ref_wav_path()).expect("read ref wav");
+    let Ok(bytes) = std::fs::read(get_ref_wav_path()) else {
+        eprintln!("Skipping test_voice_prompt_roundtrip: ref.wav asset is missing");
+        return;
+    };
 
     let prompt = model
         .encode_voice_prompt_from_bytes(&bytes)
@@ -407,7 +410,10 @@ fn test_voice_prompt_roundtrip() {
     assert_eq!(prompt.dims().len(), 3, "expected [B, T, dim] prompt");
     assert_eq!(prompt.dims()[0], 1);
 
-    let safetensors_path = std::env::temp_dir().join("warble-roundtrip-prompt.safetensors");
+    let safetensors_path = std::env::temp_dir().join(format!(
+        "warble-roundtrip-prompt-{}.safetensors",
+        std::process::id()
+    ));
     let mut tensors = HashMap::new();
     tensors.insert("audio_prompt".to_string(), prompt);
     candle_core::safetensors::save(&tensors, &safetensors_path).expect("save safetensors");

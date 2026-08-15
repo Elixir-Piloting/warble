@@ -524,7 +524,7 @@ impl TTSModel {
     }
 
     /// Encode a `[B, C, T]` audio tensor into a `[B, T, dim]` conditioning
-    /// prompt (mimi encode â†' speaker projection), without running the flow LM.
+    /// prompt (mimi encode → speaker projection), without running the flow LM.
     pub fn encode_voice_prompt_from_tensor(&self, audio: &Tensor) -> Result<Tensor> {
         let mut model_state = init_states(1, 1000);
 
