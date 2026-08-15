@@ -4,8 +4,21 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { TtsWorkspace } from "@/components/tts-workspace";
+import { VoiceCloneWizard } from "@/components/voice-clone-wizard";
+import { STOCK_VOICES } from "@/components/voice-data";
 import { audioBuffersToWavBlob } from "@/lib/pcm";
 import { StreamPlayer } from "@/lib/streamPlayer";
+import {
+  deleteCustomVoice,
+  deleteHistory,
+  getCustomVoice,
+  getHistoryAudio,
+  listCustomVoices,
+  listHistory,
+  renameCustomVoice,
+  type HistoryRecord,
+  type VoiceRecord,
+} from "@/lib/api";
 
 interface TtsLoadResult {
   variant: string;
@@ -64,7 +77,6 @@ export default function App() {
   const [appliedGenerationSettings, setAppliedGenerationSettings] =
     useState<GenerationSettings>(DEFAULT_GENERATION_SETTINGS);
   const [stockVoice, setStockVoice] = useState("alba");
-  const [voiceSpec, setVoiceSpec] = useState("");
   const [voiceId, setVoiceId] = useState<string | null>(null);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [voiceSearch, setVoiceSearch] = useState("");
@@ -73,7 +85,10 @@ export default function App() {
   const [chunkCount, setChunkCount] = useState(0);
   const [streamedSec, setStreamedSec] = useState(0);
   const [elapsedSec, setElapsedSec] = useState(0);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [history, setHistory] = useState<HistoryRecord[]>([]);
+  const [customVoices, setCustomVoices] = useState<VoiceRecord[]>([]);
+  const [selectedCustomVoice, setSelectedCustomVoice] = useState<VoiceRecord | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [status, setStatus] = useState("Ready to create");
   const [currentClip, setCurrentClip] = useState<HistoryEntry | null>(null);
   const [generatedAudioSrc, setGeneratedAudioSrc] = useState<string | null>(null);
@@ -88,6 +103,27 @@ export default function App() {
   const historyIdRef = useRef(0);
   const lastMetaRef = useRef<Pick<HistoryEntry, "sampleRate" | "channels"> | null>(null);
   const getPlayer = useCallback(() => playerRef.current ?? (playerRef.current = new StreamPlayer()), []);
+  const refreshVoices = useCallback(async () => {
+    try {
+      setCustomVoices(await listCustomVoices());
+    } catch (error) {
+      setStatus(String(error));
+    }
+  }, []);
+
+  const refreshHistory = useCallback(async () => {
+    try {
+      setHistory(await listHistory());
+    } catch (error) {
+      setStatus(String(error));
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshVoices();
+    void refreshHistory();
+  }, [refreshVoices, refreshHistory]);
+
   const clearTimer = useCallback(() => {
     if (timerRef.current !== null) {
       window.clearInterval(timerRef.current);
@@ -130,7 +166,7 @@ export default function App() {
         channels: meta.channels,
         buffers: buffersRef.current,
       };
-      setHistory((items) => [entry, ...items].slice(0, 20));
+      void refreshHistory();
       setElapsedSec(elapsed);
       setPhase("done");
       setStatus("Generation complete");
@@ -179,7 +215,7 @@ export default function App() {
     void loadModel(DEFAULT_GENERATION_SETTINGS);
   }, [loadModel]);
 
-  async function loadVoice(spec = voiceSpec.trim() || stockVoice) {
+  async function loadVoice(spec = stockVoice) {
     if (!modelInfo) {
       setStatus("The model is still loading.");
       return;
@@ -195,6 +231,73 @@ export default function App() {
       setVoiceOpen(false);
     } catch (error) {
       setPhase("error");
+      setStatus(String(error));
+    }
+  }
+
+  async function loadCustomVoice(id: number) {
+    if (!modelInfo) {
+      setStatus("The model is still loading.");
+      return;
+    }
+    try {
+      const record = await getCustomVoice(id);
+      const voiceId = await invoke<string>("get_tts_voice_state", { voiceSpec: record.embeddingsPath });
+      setVoiceId(voiceId);
+      setSelectedCustomVoice(record);
+      setPhase("loaded");
+      setStatus(`${record.name} is ready`);
+      setVoiceOpen(false);
+    } catch (error) {
+      setPhase("error");
+      setStatus(String(error));
+    }
+  }
+
+  async function handleCloned(voice: VoiceRecord) {
+    setWizardOpen(false);
+    await refreshVoices();
+    await loadCustomVoice(voice.id);
+  }
+
+  async function handleRenameVoice(id: number, name: string) {
+    try {
+      await renameCustomVoice(id, name);
+      await refreshVoices();
+      setStatus("Voice renamed");
+    } catch (error) {
+      setStatus(String(error));
+    }
+  }
+
+  async function handleDeleteVoice(id: number) {
+    try {
+      await deleteCustomVoice(id);
+      if (selectedCustomVoice?.id === id) {
+        setSelectedCustomVoice(null);
+        setVoiceId(null);
+      }
+      await refreshVoices();
+      setStatus("Voice deleted");
+    } catch (error) {
+      setStatus(String(error));
+    }
+  }
+
+  async function handleEdit(record: HistoryRecord) {
+    setText(record.text);
+    setStatus(`Loaded "${record.name}" text into the composer`);
+  }
+
+  async function handleDeleteHistory(record: HistoryRecord) {
+    try {
+      await deleteHistory(record.id);
+      if (currentClip?.id === record.id) {
+        setCurrentClip(null);
+      }
+      await refreshHistory();
+      setStatus("Generation deleted");
+    } catch (error) {
       setStatus(String(error));
     }
   }
@@ -220,7 +323,12 @@ export default function App() {
     clearTimer();
     timerRef.current = window.setInterval(() => setElapsedSec((performance.now() - t0Ref.current) / 1000), 250);
     try {
-      await invoke<number>("generate_tts_stream", { text, voiceId });
+      await invoke<number>("generate_tts_stream", {
+        text,
+        voiceId,
+        name: genMetaRef.current?.name ?? "Untitled generation",
+        voiceLabel: currentVoiceName,
+      });
     } catch (error) {
       clearTimer();
       setPhase("error");
@@ -249,15 +357,21 @@ export default function App() {
       setStreamPlaying(player.playing);
     }
   }
-  function replay(entry: HistoryEntry) {
-    setCurrentClip(entry);
-    setStatus(`Loaded ${entry.name}`);
-  }
-  async function download(entry: HistoryEntry) {
+  async function replay(record: HistoryRecord) {
     try {
-      const blob = audioBuffersToWavBlob(entry.buffers, entry.sampleRate, entry.channels);
+      const entry = await decodeHistoryAudio(record);
+      setCurrentClip(entry);
+      setStatus(`Loaded ${record.name}`);
+    } catch (error) {
+      setStatus(`Could not load audio: ${String(error)}`);
+    }
+  }
+  async function download(record: HistoryRecord) {
+    try {
+      const bytes = await getHistoryAudio(record.id);
+      const blob = new Blob([bytes], { type: "audio/wav" });
       const path = await save({
-        defaultPath: `warble-${entry.id}.wav`,
+        defaultPath: `warble-${record.id}.wav`,
         filters: [{ name: "WAV audio", extensions: ["wav"] }],
       });
       if (path) {
@@ -289,45 +403,63 @@ export default function App() {
       ? 100
       : 0;
   const hasPendingSettings = JSON.stringify(generationSettings) !== JSON.stringify(appliedGenerationSettings);
+  const currentVoiceName =
+    selectedCustomVoice?.name ?? STOCK_VOICES.find((voice) => voice.id === stockVoice)?.name ?? stockVoice;
 
   return (
-    <TtsWorkspace
-      text={text}
-      onTextChange={setText}
-      modelInfo={modelInfo}
-      variant={variant}
-      loading={loading}
-      generating={generating}
-      status={status}
-      progress={progress}
-      chunkCount={chunkCount}
-      streamedSec={streamedSec}
-      elapsedSec={elapsedSec}
-      streamPlaying={streamPlaying}
-      onToggleStreamPlayback={toggleStreamPlayback}
-      voiceId={voiceId}
-      stockVoice={stockVoice}
-      voiceOpen={voiceOpen}
-      onVoiceOpenChange={setVoiceOpen}
-      voiceSearch={voiceSearch}
-      onVoiceSearchChange={setVoiceSearch}
-      voiceSpec={voiceSpec}
-      onVoiceSpecChange={setVoiceSpec}
-      onLoadVoice={(spec) => void loadVoice(spec)}
-      onGenerate={() => void generate()}
-      onStopGeneration={stopGeneration}
-      history={history}
-      currentClip={currentClip}
-      generatedAudioSrc={generatedAudioSrc}
-      onReplay={replay}
-      onDownload={(entry) => void download(entry)}
-      generationSettings={generationSettings}
-      hasPendingSettings={hasPendingSettings}
-      onGenerationSettingsChange={setGenerationSettings}
-      onReloadModel={() => void loadModel(generationSettings)}
-      onResetGenerationSettings={() => setGenerationSettings(DEFAULT_GENERATION_SETTINGS)}
-      onInsertPause={() => setText((value) => `${value}${value.endsWith(" ") ? "" : " "}[pause:500ms] `)}
-    />
+    <>
+      <TtsWorkspace
+        text={text}
+        onTextChange={setText}
+        modelInfo={modelInfo}
+        variant={variant}
+        loading={loading}
+        generating={generating}
+        status={status}
+        progress={progress}
+        chunkCount={chunkCount}
+        streamedSec={streamedSec}
+        elapsedSec={elapsedSec}
+        streamPlaying={streamPlaying}
+        onToggleStreamPlayback={toggleStreamPlayback}
+        voiceId={voiceId}
+        stockVoice={stockVoice}
+        voiceOpen={voiceOpen}
+        onVoiceOpenChange={setVoiceOpen}
+        voiceSearch={voiceSearch}
+        onVoiceSearchChange={setVoiceSearch}
+        onLoadVoice={(spec) => void loadVoice(spec)}
+        customVoices={customVoices}
+        selectedCustomVoiceId={selectedCustomVoice?.id ?? null}
+        onSelectCustomVoice={(id) => void loadCustomVoice(id)}
+        onCloneVoice={() => setWizardOpen(true)}
+        onRenameVoice={(id, name) => void handleRenameVoice(id, name)}
+        onDeleteVoice={(id) => void handleDeleteVoice(id)}
+        wizardOpen={wizardOpen}
+        onWizardOpenChange={setWizardOpen}
+        currentVoiceName={currentVoiceName}
+        onGenerate={() => void generate()}
+        onStopGeneration={stopGeneration}
+        history={history}
+        currentClip={currentClip}
+        generatedAudioSrc={generatedAudioSrc}
+        onReplay={(record) => void replay(record)}
+        onDownload={(record) => void download(record)}
+        onEdit={(record) => void handleEdit(record)}
+        onDeleteHistory={(record) => void handleDeleteHistory(record)}
+        generationSettings={generationSettings}
+        hasPendingSettings={hasPendingSettings}
+        onGenerationSettingsChange={setGenerationSettings}
+        onReloadModel={() => void loadModel(generationSettings)}
+        onResetGenerationSettings={() => setGenerationSettings(DEFAULT_GENERATION_SETTINGS)}
+        onInsertPause={() => setText((value) => `${value}${value.endsWith(" ") ? "" : " "}[pause:500ms] `)}
+      />
+      <VoiceCloneWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        onCloned={(voice) => void handleCloned(voice)}
+      />
+    </>
   ); /*
     <header className="flex items-center justify-between border-b border-border pb-5"><div className="flex items-center gap-3"><div className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground"><Waves className="size-4" /></div><span className="text-lg font-semibold tracking-[-0.04em]">warble</span><span className="hidden text-xs text-muted-foreground md:inline">LOCAL VOICE STUDIO</span></div><div className="flex items-center gap-2 text-xs text-muted-foreground"><span className={`size-1.5 rounded-full ${modelInfo ? "bg-primary" : "bg-muted-foreground"}`} />{loading ? "Preparing model" : modelInfo ? "Model online" : "Connecting"}</div></header>
     <div className="grid flex-1 gap-10 py-10 lg:grid-cols-[minmax(0,1fr)_330px]"><section className="min-w-0"><div className="mb-9"><p className="text-[10px] font-bold uppercase tracking-[.18em] text-primary">Text to speech</p><h1 className="mt-3 max-w-2xl text-4xl font-semibold tracking-[-0.06em] md:text-6xl">Give your words<br /><span className="text-muted-foreground">a point of view.</span></h1></div>
@@ -346,4 +478,23 @@ function titleFromText(value: string) {
     .filter(Boolean)
     .slice(0, 6);
   return words.length ? words.join(" ") : "Untitled generation";
+}
+
+async function decodeHistoryAudio(record: HistoryRecord): Promise<HistoryEntry> {
+  const bytes = await getHistoryAudio(record.id);
+  const ctx = new AudioContext();
+  const decoded = await ctx.decodeAudioData(bytes);
+  void ctx.close();
+  return {
+    id: record.id,
+    name: record.name,
+    createdAt: record.createdAt,
+    charCount: record.charCount ?? 0,
+    chunkCount: record.chunkCount ?? 0,
+    speechSec: record.speechSec ?? 0,
+    elapsedSec: record.elapsedSec ?? 0,
+    sampleRate: record.sampleRate ?? decoded.sampleRate,
+    channels: record.channels ?? decoded.numberOfChannels,
+    buffers: [decoded],
+  };
 }
