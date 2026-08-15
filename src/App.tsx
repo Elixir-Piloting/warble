@@ -78,7 +78,6 @@ export default function App() {
     useState<GenerationSettings>(DEFAULT_GENERATION_SETTINGS);
   const [stockVoice, setStockVoice] = useState("alba");
   const [voiceId, setVoiceId] = useState<string | null>(null);
-  const [voiceOpen, setVoiceOpen] = useState(false);
   const [text, setText] = useState("Hello! This is a test of the built in text to speech engine.");
   const [phase, setPhase] = useState<Phase>("idle");
   const [chunkCount, setChunkCount] = useState(0);
@@ -254,7 +253,6 @@ export default function App() {
       setPhase("loaded");
       setStatus(`${spec} is ready`);
       saveLastVoice({ kind: "stock", spec });
-      setVoiceOpen(false);
     } catch (error) {
       setPhase("error");
       setStatus(String(error));
@@ -276,7 +274,6 @@ export default function App() {
       setPhase("loaded");
       setStatus(`${record.name} is ready`);
       saveLastVoice({ kind: "custom", spec: String(id) });
-      setVoiceOpen(false);
     } catch (error) {
       setPhase("error");
       setStatus(String(error));
@@ -335,7 +332,6 @@ export default function App() {
 
   async function generate() {
     if (!voiceId) {
-      setVoiceOpen(true);
       setStatus("Choose a voice to continue.");
       return;
     }
@@ -479,8 +475,6 @@ export default function App() {
         onToggleStreamPlayback={toggleStreamPlayback}
         voiceId={voiceId}
         stockVoice={stockVoice}
-        voiceOpen={voiceOpen}
-        onVoiceOpenChange={setVoiceOpen}
         onLoadVoice={(spec) => void loadVoice(spec)}
         customVoices={customVoices}
         selectedCustomVoiceId={selectedCustomVoice?.id ?? null}

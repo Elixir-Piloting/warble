@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Download, FileAudio, Gauge, History, LoaderCircle, Mic, Pause, Play, Search, Sparkles, Square } from "lucide-react";
+import { ChevronRight, Download, FileAudio, Gauge, History, LoaderCircle, Pause, Play, Search, Sparkles, Square } from "lucide-react";
 import {
   AudioPlayerButton,
   AudioPlayerDuration,
@@ -8,8 +8,8 @@ import {
   AudioPlayerSpeed,
   AudioPlayerTime,
 } from "@/components/ui/audio-player";
-import { VoicePicker } from "@/components/ui/voice-picker";
-import type { ElevenLabs } from "@elevenlabs/elevenlabs-js";
+import { VoiceBrowser } from "@/components/voice-browser";
+import { VoiceOrb } from "@/components/voice-orb";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,6 @@ import { Progress } from "@/components/ui/progress";
 import { GenerationSettings, GenerationSettingsPanel } from "@/components/generation-settings";
 import { HistoryItem } from "@/components/history-item";
 import { STOCK_VOICES } from "@/components/voice-data";
-import { VoicePickerDialog } from "@/components/voice-picker-dialog";
 import type { HistoryRecord, VoiceRecord } from "@/lib/api";
 
 interface ModelInfo {
@@ -56,8 +55,6 @@ interface TtsWorkspaceProps {
   onToggleStreamPlayback: () => void;
   voiceId: string | null;
   stockVoice: string;
-  voiceOpen: boolean;
-  onVoiceOpenChange: (open: boolean) => void;
   onLoadVoice: (spec?: string) => void;
   customVoices: VoiceRecord[];
   selectedCustomVoiceId: number | null;
@@ -255,47 +252,58 @@ function LiveStreamBar({
 }
 
 function SettingsPanel(props: TtsWorkspaceProps) {
-  const stockVoices = useMemo<ElevenLabs.Voice[]>(
-    () =>
-      STOCK_VOICES.map((voice) => ({
-        voiceId: voice.id,
-        name: voice.name,
-        labels: { description: voice.description, tone: voice.tone },
-      })),
-    []
-  );
-  const hasActiveStockVoice =
-    props.selectedCustomVoiceId == null &&
-    Boolean(props.voiceId) &&
-    STOCK_VOICES.some((voice) => voice.id === props.stockVoice);
+  const [browserOpen, setBrowserOpen] = useState(false);
+
+  if (browserOpen) {
+    return (
+      <VoiceBrowser
+        voiceId={props.voiceId}
+        stockVoice={props.stockVoice}
+        onLoadVoice={(id) => {
+          props.onLoadVoice(id);
+          setBrowserOpen(false);
+        }}
+        customVoices={props.customVoices}
+        selectedCustomVoiceId={props.selectedCustomVoiceId}
+        onSelectCustomVoice={(id) => {
+          props.onSelectCustomVoice(id);
+          setBrowserOpen(false);
+        }}
+        onCloneVoice={props.onCloneVoice}
+        onRenameVoice={props.onRenameVoice}
+        onDeleteVoice={props.onDeleteVoice}
+        loading={props.loading}
+        variant={props.variant}
+        onBack={() => setBrowserOpen(false)}
+      />
+    );
+  }
+
+  const stockDescription = STOCK_VOICES.find((voice) => voice.id === props.stockVoice)?.description ?? "Stock voice";
 
   return (
     <div className="flex flex-col gap-7 p-5">
       <section>
         <h2 className="text-sm font-medium">Voice</h2>
-        <div className="mt-3 flex flex-col gap-2">
-          <VoicePicker
-            voices={stockVoices}
-            value={hasActiveStockVoice ? props.stockVoice : undefined}
-            onValueChange={(id) => props.onLoadVoice(id)}
-            placeholder={props.voiceId ? props.currentVoiceName : "Select a voice..."}
-          />
-          <Button variant="outline" className="w-full justify-start" onClick={() => props.onVoiceOpenChange(true)}>
-            <Mic className="size-4" /> Custom voices
-          </Button>
-          <VoicePickerDialog
-            open={props.voiceOpen}
-            onOpenChange={props.onVoiceOpenChange}
-            selectedCustomVoiceId={props.selectedCustomVoiceId}
-            customVoices={props.customVoices}
-            onSelectCustom={props.onSelectCustomVoice}
-            onClone={props.onCloneVoice}
-            onRenameCustom={props.onRenameVoice}
-            onDeleteCustom={props.onDeleteVoice}
-            loading={props.loading}
-            variant={props.variant}
-          />
-        </div>
+        <button
+          onClick={() => setBrowserOpen(true)}
+          className="hover:bg-accent mt-3 flex min-h-12 w-full items-center gap-3 rounded-lg border border-border px-3 py-2 text-left transition-colors"
+        >
+          <VoiceOrb active={Boolean(props.voiceId)} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium">
+              {props.voiceId ? props.currentVoiceName : "Select a voice..."}
+            </span>
+            <span className="text-muted-foreground block truncate text-xs">
+              {props.voiceId
+                ? props.selectedCustomVoiceId != null
+                  ? "Custom voice"
+                  : stockDescription
+                : "Browse voice library"}
+            </span>
+          </span>
+          <ChevronRight className="text-muted-foreground size-4" />
+        </button>
       </section>
       <section>
         <h2 className="text-sm font-medium">Model</h2>
