@@ -491,6 +491,32 @@ pub async fn clone_voice(
     store.get_voice(id)?.ok_or_else(|| "voice disappeared after insert".to_string())
 }
 
+// ---- history Tauri commands ----
+
+#[tauri::command]
+pub fn list_history(store: State<'_, Store>) -> Result<Vec<HistoryRecord>, String> {
+    store.list_history()
+}
+
+#[tauri::command]
+pub fn get_history(store: State<'_, Store>, id: i64) -> Result<HistoryRecord, String> {
+    store.get_history(id)?.ok_or_else(|| format!("unknown history id: {id}"))
+}
+
+#[tauri::command]
+pub fn get_history_audio(store: State<'_, Store>, id: i64) -> Result<tauri::ipc::Response, String> {
+    let rec = store.get_history(id)?.ok_or_else(|| format!("unknown history id: {id}"))?;
+    let bytes = std::fs::read(&rec.wav_path).map_err(|e| format!("failed to read audio: {e}"))?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+#[tauri::command]
+pub fn delete_history(store: State<'_, Store>, id: i64) -> Result<(), String> {
+    let rec = store.delete_history(id)?;
+    let _ = std::fs::remove_file(&rec.wav_path);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

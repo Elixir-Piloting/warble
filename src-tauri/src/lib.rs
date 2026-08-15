@@ -31,10 +31,10 @@ pub fn run() {
             store::get_custom_voice,
             store::rename_custom_voice,
             store::delete_custom_voice,
-            // store::list_history,
-            // store::get_history,
-            // store::get_history_audio,
-            // store::delete_history,
+            store::list_history,
+            store::get_history,
+            store::get_history_audio,
+            store::delete_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

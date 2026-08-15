@@ -23,6 +23,8 @@ use candle_core::Device;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
+use crate::store::{NewHistory, Store};
+
 /// Namespace for all TTS events emitted to the frontend.
 const EVENT_PREFIX: &str = "tts://";
 
@@ -288,13 +290,18 @@ pub async fn get_tts_voice_state(
 /// Generate speech for `text` using a previously created voice state,
 /// streaming each audio chunk to the frontend as a `tts://chunk` event.
 ///
-/// Returns the number of chunks streamed once generation completes.
+/// Returns the number of chunks streamed once generation completes. The full
+/// output is also persisted to disk as `history/<id>.wav` and recorded in the
+/// store so users can replay / edit it later.
 #[tauri::command]
 pub async fn generate_tts_stream(
     app: AppHandle,
     state: State<'_, TtsState>,
+    store: State<'_, Store>,
     text: String,
     voice_id: String,
+    name: String,
+    voice_label: Option<String>,
 ) -> Result<u32, String> {
     let model = state
         .model
@@ -317,9 +324,19 @@ pub async fn generate_tts_stream(
 
     let app = app.clone();
     let voice_id_out = voice_id.clone();
+    let store = store.inner().clone();
+    let name = if name.trim().is_empty() {
+        "Untitled generation".to_string()
+    } else {
+        name
+    };
+    let created_at = crate::store::now_ms();
+    let char_count = text.chars().count() as i64;
+    let t0 = std::time::Instant::now();
 
     tauri::async_runtime::spawn_blocking(move || {
         let mut index: u32 = 0;
+        let mut pcm_accum: Vec<u8> = Vec::new();
 
         for chunk in model.generate_stream(&text, &voice_state) {
             let tensor = match chunk {
@@ -361,10 +378,40 @@ pub async fn generate_tts_stream(
                 index,
                 sample_rate,
                 channels,
-                pcm,
+                pcm: pcm.clone(),
             });
 
+            pcm_accum.extend_from_slice(&pcm);
             index += 1;
+        }
+
+        // Persist the finished generation (durable copy; the frontend keeps
+        // its live in-memory playback). A persistence failure is non-fatal:
+        // the audio still played, so only log it.
+        let speech_samples = pcm_accum.len() / 2 / channels as usize;
+        let speech_sec = speech_samples as f64 / sample_rate as f64;
+        let elapsed_sec = t0.elapsed().as_secs_f64();
+        if let Err(e) = (|| -> Result<(), String> {
+            let history_dir = store.data_dir().join("history");
+            std::fs::create_dir_all(&history_dir).map_err(|e| e.to_string())?;
+            let id = store.insert_history(&NewHistory {
+                name: name.clone(),
+                text: text.clone(),
+                created_at,
+                char_count: Some(char_count),
+                chunk_count: Some(index as i64),
+                speech_sec: Some(speech_sec),
+                elapsed_sec: Some(elapsed_sec),
+                sample_rate: Some(sample_rate as i64),
+                channels: Some(channels as i64),
+                voice_label,
+            })?;
+            let wav_path = store.history_wav_path(id);
+            crate::store::write_wav_file(&wav_path, &pcm_accum, sample_rate, channels)?;
+            store.set_history_wav_path(id, &wav_path)?;
+            Ok(())
+        })() {
+            eprintln!("failed to persist history: {e}");
         }
 
         emit(&app, "done", TtsDonePayload {
