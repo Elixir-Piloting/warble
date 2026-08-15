@@ -102,6 +102,7 @@ export default function App() {
   const wasStoppingRef = useRef(false);
   const historyIdRef = useRef(0);
   const lastMetaRef = useRef<Pick<HistoryEntry, "sampleRate" | "channels"> | null>(null);
+  const autoLoadedVoiceRef = useRef(false);
   const getPlayer = useCallback(() => playerRef.current ?? (playerRef.current = new StreamPlayer()), []);
   const refreshVoices = useCallback(async () => {
     try {
@@ -215,6 +216,24 @@ export default function App() {
     void loadModel(DEFAULT_GENERATION_SETTINGS);
   }, [loadModel]);
 
+  useEffect(() => {
+    if (!modelInfo || autoLoadedVoiceRef.current) return;
+    autoLoadedVoiceRef.current = true;
+    const last = readLastVoice();
+    if (!last) return;
+    if (last.kind === "stock") {
+      void loadVoice(last.spec);
+    } else {
+      const id = Number(last.spec);
+      void getCustomVoice(id)
+        .then(() => loadCustomVoice(id))
+        .catch(() => {
+          clearLastVoice();
+          void loadVoice("alba");
+        });
+    }
+  }, [modelInfo]);
+
   async function loadVoice(spec = stockVoice) {
     if (!modelInfo) {
       setStatus("The model is still loading.");
@@ -229,6 +248,7 @@ export default function App() {
       setStockVoice(spec);
       setPhase("loaded");
       setStatus(`${spec} is ready`);
+      saveLastVoice({ kind: "stock", spec });
       setVoiceOpen(false);
     } catch (error) {
       setPhase("error");
@@ -248,6 +268,7 @@ export default function App() {
       setSelectedCustomVoice(record);
       setPhase("loaded");
       setStatus(`${record.name} is ready`);
+      saveLastVoice({ kind: "custom", spec: String(id) });
       setVoiceOpen(false);
     } catch (error) {
       setPhase("error");
@@ -278,6 +299,7 @@ export default function App() {
       if (selectedCustomVoice?.id === id) {
         setSelectedCustomVoice(null);
         setVoiceId(null);
+        clearLastVoice();
       }
       await refreshVoices();
       setStatus("Voice deleted");
@@ -484,6 +506,40 @@ export default function App() {
       />
     </>
   );
+}
+
+interface LastVoice {
+  kind: "stock" | "custom";
+  spec: string;
+}
+const LAST_VOICE_KEY = "warble:last-voice";
+
+function readLastVoice(): LastVoice | null {
+  try {
+    const raw = localStorage.getItem(LAST_VOICE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as LastVoice;
+    if (parsed.kind !== "stock" && parsed.kind !== "custom") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveLastVoice(voice: LastVoice) {
+  try {
+    localStorage.setItem(LAST_VOICE_KEY, JSON.stringify(voice));
+  } catch {
+    // storage unavailable — non-fatal
+  }
+}
+
+function clearLastVoice() {
+  try {
+    localStorage.removeItem(LAST_VOICE_KEY);
+  } catch {
+    // storage unavailable — non-fatal
+  }
 }
 
 function titleFromText(value: string) {
