@@ -502,6 +502,30 @@ impl TTSModel {
 
     /// Create voice state from audio tensor
     pub fn get_voice_state_from_tensor(&self, audio: &Tensor) -> Result<ModelState> {
+        let conditioning = self.encode_voice_prompt_from_tensor(audio)?;
+        let mut flow_state = init_states(1, 1000);
+        self.run_flow_lm_prompt(&conditioning, &mut flow_state)?;
+        Ok(flow_state)
+    }
+
+    /// Encode raw WAV bytes into a speaker-conditioning prompt tensor.
+    ///
+    /// This is the pre-computed `audio_prompt` latent stored in
+    /// `.safetensors` voice files. Produces `[B, T, dim]`.
+    pub fn encode_voice_prompt_from_bytes(&self, bytes: &[u8]) -> Result<Tensor> {
+        let (audio, sample_rate) = crate::audio::read_wav_from_bytes(bytes)?;
+        let audio = if sample_rate != self.sample_rate as u32 {
+            crate::audio::resample(&audio, sample_rate, self.sample_rate as u32)?
+        } else {
+            audio
+        };
+        let audio = audio.unsqueeze(0)?;
+        self.encode_voice_prompt_from_tensor(&audio)
+    }
+
+    /// Encode a `[B, C, T]` audio tensor into a `[B, T, dim]` conditioning
+    /// prompt (mimi encode â†' speaker projection), without running the flow LM.
+    pub fn encode_voice_prompt_from_tensor(&self, audio: &Tensor) -> Result<Tensor> {
         let mut model_state = init_states(1, 1000);
 
         // Ensure audio tensor is on the same device as the model (fixes Metal device mismatch)
@@ -520,7 +544,6 @@ impl TTSModel {
             0
         };
         let audio = if pad_len > 0 {
-            // Create padding on the same device as audio (which is now on self.device)
             let pad = Tensor::zeros((b, c, pad_len), audio.dtype(), &self.device)?;
             Tensor::cat(&[&audio, &pad], 2)?
         } else {
@@ -528,7 +551,6 @@ impl TTSModel {
         };
 
         // Encode audio through Mimi in chunks to avoid OOM in SEANet Conv1d layers.
-        // Chunk size is adapted to prompt length unless explicitly overridden.
         let mut encoded_chunks = Vec::new();
         let (_b, _c, total_samples) = audio.dims3()?;
         let chunk_frames = self.adaptive_voice_prompt_chunk_frames(total_samples, frame_size);
@@ -546,17 +568,12 @@ impl TTSModel {
         let latents = encoded.transpose(1, 2)?.to_dtype(DType::F32)?;
 
         // Project to flow model space: [B, T, ldim] @ [dim, ldim].T -> [B, T, dim]
-        // Candle needs 2D @ 2D for matmul, so reshape
         let (b, t, d) = latents.dims3()?;
         let latents_2d = latents.reshape((b * t, d))?;
         let conditioning_2d = latents_2d.matmul(&self.speaker_proj_weight.t()?)?;
         let conditioning = conditioning_2d.reshape((b, t, self.dim))?;
 
-        // Run flow_lm with audio conditioning to update state
-        let mut flow_state = init_states(1, 1000);
-        self.run_flow_lm_prompt(&conditioning, &mut flow_state)?;
-
-        Ok(flow_state)
+        Ok(conditioning)
     }
 
     fn adaptive_voice_prompt_chunk_frames(&self, total_samples: usize, frame_size: usize) -> usize {

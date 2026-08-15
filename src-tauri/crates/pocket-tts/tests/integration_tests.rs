@@ -5,9 +5,10 @@
 
 use pocket_tts::TTSModel;
 use pocket_tts::audio::{read_wav, write_wav};
-use pocket_tts::voice_state::init_states;
+use pocket_tts::voice_state::{ModelState, init_states};
 use pocket_tts::weights::download_if_necessary;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
@@ -390,4 +391,67 @@ fn test_quantize_module_integration() {
     let config = QuantizeConfig::default();
     assert_eq!(config.num_levels, 256);
     assert!(config.skip_layers.contains(&"embed".to_string()));
+}
+
+#[test]
+fn test_voice_prompt_roundtrip() {
+    if !require_hf_token("test_voice_prompt_roundtrip") {
+        return;
+    }
+    let model = get_model();
+    let bytes = std::fs::read(get_ref_wav_path()).expect("read ref wav");
+
+    let prompt = model
+        .encode_voice_prompt_from_bytes(&bytes)
+        .expect("encode voice prompt");
+    assert_eq!(prompt.dims().len(), 3, "expected [B, T, dim] prompt");
+    assert_eq!(prompt.dims()[0], 1);
+
+    let safetensors_path = std::env::temp_dir().join("warble-roundtrip-prompt.safetensors");
+    let mut tensors = HashMap::new();
+    tensors.insert("audio_prompt".to_string(), prompt);
+    candle_core::safetensors::save(&tensors, &safetensors_path).expect("save safetensors");
+
+    let state_from_file = model
+        .get_voice_state_from_prompt_file(&safetensors_path)
+        .expect("load voice state from file");
+    let state_from_wav = model
+        .get_voice_state_from_bytes(&bytes)
+        .expect("load voice state from wav");
+    assert_state_equal(&state_from_file, &state_from_wav);
+
+    let _ = std::fs::remove_file(&safetensors_path);
+}
+
+fn assert_state_equal(a: &ModelState, b: &ModelState) {
+    assert_eq!(a.len(), b.len(), "state key count differs");
+    for (module_key, module_a) in a {
+        let module_b = b
+            .get(module_key)
+            .unwrap_or_else(|| panic!("module key missing: {module_key}"));
+        assert_eq!(module_a.len(), module_b.len(), "module {module_key} key count differs");
+        for (name, ta) in module_a {
+            let tb = module_b
+                .get(name)
+                .unwrap_or_else(|| panic!("tensor key missing: {module_key}.{name}"));
+            assert_eq!(ta.dims(), tb.dims(), "dims differ for {module_key}.{name}");
+            let fa = ta
+                .flatten_all()
+                .and_then(|t| t.to_dtype(candle_core::DType::F32))
+                .and_then(|t| t.to_vec1::<f32>())
+                .unwrap_or_else(|e| panic!("flatten {module_key}.{name}: {e}"));
+            let fb = tb
+                .flatten_all()
+                .and_then(|t| t.to_dtype(candle_core::DType::F32))
+                .and_then(|t| t.to_vec1::<f32>())
+                .unwrap_or_else(|e| panic!("flatten {module_key}.{name}: {e}"));
+            assert_eq!(fa.len(), fb.len());
+            for (i, (x, y)) in fa.iter().zip(fb.iter()).enumerate() {
+                assert!(
+                    (x - y).abs() < 1e-3,
+                    "value mismatch at {module_key}.{name}[{i}]: {x} vs {y}"
+                );
+            }
+        }
+    }
 }
