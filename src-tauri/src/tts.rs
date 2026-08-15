@@ -441,6 +441,53 @@ pub async fn generate_tts_stream(
     .map_err(|e| format!("generation task panicked: {e}"))?
 }
 
+/// Generate a short speech sample for a voice spec WITHOUT persisting it to
+/// history or emitting stream events. Returns the WAV bytes so the frontend
+/// can play it as a preview blob. `voice_spec` uses the same formats as
+/// `get_tts_voice_state` (stock name, `hf://` URL, or local path).
+#[tauri::command]
+pub async fn generate_tts_preview(
+    state: State<'_, TtsState>,
+    voice_spec: String,
+    text: String,
+) -> Result<tauri::ipc::Response, String> {
+    let model = state
+        .model
+        .lock()
+        .map_err(|_| "model lock poisoned".to_string())?
+        .as_ref()
+        .ok_or("no model loaded; call load_tts_model first")?
+        .clone();
+
+    let spec_out = voice_spec.clone();
+    let model_for_resolve = model.clone();
+    let voice_state =
+        tauri::async_runtime::spawn_blocking(move || -> Result<ModelState, String> {
+            resolve_voice_state(&model_for_resolve, &spec_out)
+        })
+        .await
+        .map_err(|e| format!("voice task panicked: {e}"))??;
+
+    let sample_rate = model.sample_rate as u32;
+    let channels = model.mimi.channels as u16;
+
+    let generated = tauri::async_runtime::spawn_blocking(move || -> Result<Vec<u8>, String> {
+        let mut pcm_accum: Vec<u8> = Vec::new();
+        for chunk in model.generate_stream(&text, &voice_state) {
+            let tensor = chunk.map_err(|e| format!("generation failed: {e}"))?;
+            let tensor = tensor.squeeze(0).map_err(|e| format!("audio shaping failed: {e}"))?;
+            let pcm = pocket_tts::audio::pcm_i16_le_bytes(&tensor)
+                .map_err(|e| format!("audio encoding failed: {e}"))?;
+            pcm_accum.extend_from_slice(&pcm);
+        }
+        crate::store::wav_bytes(&pcm_accum, sample_rate, channels)
+    })
+    .await
+    .map_err(|e| format!("preview task panicked: {e}"))??;
+
+    Ok(tauri::ipc::Response::new(generated))
+}
+
 /// Signal the running generation (if any) to stop; it will not persist a
 /// history row.
 #[tauri::command]

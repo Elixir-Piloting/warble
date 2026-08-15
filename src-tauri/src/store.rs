@@ -285,30 +285,37 @@ pub fn now_ms() -> i64 {
         .unwrap_or(0)
 }
 
-/// Write a standard 16-bit PCM WAV file from little-endian interleaved i16
-/// sample bytes (`pcm` is exactly what `pocket_tts::audio::pcm_i16_le_bytes`
+/// Encode 16-bit PCM WAV bytes from little-endian interleaved i16 sample
+/// bytes (`pcm` is exactly what `pocket_tts::audio::pcm_i16_le_bytes`
 /// produces).
-pub fn write_wav_file(path: &Path, pcm: &[u8], sample_rate: u32, channels: u16) -> Result<(), String> {
+pub fn wav_bytes(pcm: &[u8], sample_rate: u32, channels: u16) -> Result<Vec<u8>, String> {
     use std::io::Write;
     let data_size = pcm.len() as u32;
     let byte_rate = sample_rate * channels as u32 * 2;
     let block_align = channels as u16 * 2;
-    let mut f = std::fs::File::create(path).map_err(|e| e.to_string())?;
-    f.write_all(b"RIFF").map_err(|e| e.to_string())?;
-    f.write_all(&(36 + data_size).to_le_bytes()).map_err(|e| e.to_string())?;
-    f.write_all(b"WAVE").map_err(|e| e.to_string())?;
-    f.write_all(b"fmt ").map_err(|e| e.to_string())?;
-    f.write_all(&16u32.to_le_bytes()).map_err(|e| e.to_string())?;
-    f.write_all(&1u16.to_le_bytes()).map_err(|e| e.to_string())?; // PCM
-    f.write_all(&channels.to_le_bytes()).map_err(|e| e.to_string())?;
-    f.write_all(&sample_rate.to_le_bytes()).map_err(|e| e.to_string())?;
-    f.write_all(&byte_rate.to_le_bytes()).map_err(|e| e.to_string())?;
-    f.write_all(&block_align.to_le_bytes()).map_err(|e| e.to_string())?;
-    f.write_all(&16u16.to_le_bytes()).map_err(|e| e.to_string())?; // bits per sample
-    f.write_all(b"data").map_err(|e| e.to_string())?;
-    f.write_all(&data_size.to_le_bytes()).map_err(|e| e.to_string())?;
-    f.write_all(pcm).map_err(|e| e.to_string())?;
-    Ok(())
+    let mut out = Vec::with_capacity(44 + pcm.len());
+    out.write_all(b"RIFF").map_err(|e| e.to_string())?;
+    out.write_all(&(36 + data_size).to_le_bytes()).map_err(|e| e.to_string())?;
+    out.write_all(b"WAVE").map_err(|e| e.to_string())?;
+    out.write_all(b"fmt ").map_err(|e| e.to_string())?;
+    out.write_all(&16u32.to_le_bytes()).map_err(|e| e.to_string())?;
+    out.write_all(&1u16.to_le_bytes()).map_err(|e| e.to_string())?; // PCM
+    out.write_all(&channels.to_le_bytes()).map_err(|e| e.to_string())?;
+    out.write_all(&sample_rate.to_le_bytes()).map_err(|e| e.to_string())?;
+    out.write_all(&byte_rate.to_le_bytes()).map_err(|e| e.to_string())?;
+    out.write_all(&block_align.to_le_bytes()).map_err(|e| e.to_string())?;
+    out.write_all(&16u16.to_le_bytes()).map_err(|e| e.to_string())?; // bits per sample
+    out.write_all(b"data").map_err(|e| e.to_string())?;
+    out.write_all(&data_size.to_le_bytes()).map_err(|e| e.to_string())?;
+    out.write_all(pcm).map_err(|e| e.to_string())?;
+    Ok(out)
+}
+
+/// Write a standard 16-bit PCM WAV file from little-endian interleaved i16
+/// sample bytes.
+pub fn write_wav_file(path: &Path, pcm: &[u8], sample_rate: u32, channels: u16) -> Result<(), String> {
+    let bytes = wav_bytes(pcm, sample_rate, channels)?;
+    std::fs::write(path, bytes).map_err(|e| e.to_string())
 }
 
 #[derive(Clone, Serialize)]
@@ -622,5 +629,27 @@ mod tests {
         assert_eq!(&bytes[44..], pcm.as_slice());
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_wav_bytes_roundtrip() {
+        let pcm: Vec<u8> = vec![0xff, 0xff, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8, 0];
+        let sample_rate = 24000u32;
+        let channels = 2u16;
+        let bytes = wav_bytes(&pcm, sample_rate, channels).expect("encode wav");
+
+        assert_eq!(&bytes[0..4], b"RIFF");
+        assert_eq!(&bytes[8..12], b"WAVE");
+        assert_eq!(&bytes[12..16], b"fmt ");
+        assert_eq!(&bytes[36..40], b"data");
+
+        let data_size = u32::from_le_bytes(bytes[40..44].try_into().unwrap());
+        let sr = u32::from_le_bytes(bytes[24..28].try_into().unwrap());
+        let bits = u16::from_le_bytes(bytes[34..36].try_into().unwrap());
+
+        assert_eq!(data_size, pcm.len() as u32);
+        assert_eq!(sr, sample_rate);
+        assert_eq!(bits, 16);
+        assert_eq!(&bytes[44..], pcm.as_slice());
     }
 }
