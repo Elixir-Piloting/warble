@@ -87,6 +87,7 @@ function VoicePicker({
                     isSelected={value === voice.voiceId}
                     onSelect={() => {
                       onValueChange?.(voice.voiceId!)
+                      setIsOpen?.(false)
                     }}
                   />
                 ))}

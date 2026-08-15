@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Download, FileAudio, Gauge, History, LoaderCircle, Pause, Play, Search, Sparkles, Square } from "lucide-react";
+import { Download, FileAudio, Gauge, History, LoaderCircle, Mic, Pause, Play, Search, Sparkles, Square } from "lucide-react";
 import {
   AudioPlayerButton,
   AudioPlayerDuration,
@@ -8,6 +8,8 @@ import {
   AudioPlayerSpeed,
   AudioPlayerTime,
 } from "@/components/ui/audio-player";
+import { VoicePicker } from "@/components/ui/voice-picker";
+import type { ElevenLabs } from "@elevenlabs/elevenlabs-js";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,8 +58,6 @@ interface TtsWorkspaceProps {
   stockVoice: string;
   voiceOpen: boolean;
   onVoiceOpenChange: (open: boolean) => void;
-  voiceSearch: string;
-  onVoiceSearchChange: (value: string) => void;
   onLoadVoice: (spec?: string) => void;
   customVoices: VoiceRecord[];
   selectedCustomVoiceId: number | null;
@@ -86,88 +86,89 @@ interface TtsWorkspaceProps {
 
 export function TtsWorkspace(props: TtsWorkspaceProps) {
   const [rightTab, setRightTab] = useState<"settings" | "history">("history");
-  const selectedVoice = STOCK_VOICES.find((voice) => voice.id === props.stockVoice) ?? STOCK_VOICES[0];
   const showTransport = Boolean(props.currentClip && props.generatedAudioSrc);
 
   return (
     <TooltipProvider>
       <div className="bg-background text-foreground h-screen overflow-hidden">
-        <div className="grid h-full min-h-0 lg:grid-cols-[minmax(0,1fr)_460px]">
-          <main className="border-border grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] border-r">
-            <section className="min-h-0 overflow-y-auto">
-              <div className="mx-auto flex h-full w-full max-w-5xl flex-col px-8 py-16 lg:px-16">
-                <Textarea
-                  value={props.text}
-                  onChange={(event) => props.onTextChange(event.currentTarget.value)}
-                  className="field-sizing-fixed min-h-[420px] flex-1 resize-none overflow-y-auto border-0 bg-transparent p-0 text-lg leading-8 shadow-none focus-visible:ring-0 md:text-xl"
-                  placeholder="Write something to say…"
-                />
-                {props.generating && (
-                  <LiveStreamBar
-                    streamPlaying={props.streamPlaying}
-                    elapsedSec={props.elapsedSec}
-                    progress={props.progress}
-                    onToggleStreamPlayback={props.onToggleStreamPlayback}
+        <div className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto]">
+          <div className="grid h-full min-h-0 lg:grid-cols-[minmax(0,1fr)_460px]">
+            <main className="border-border min-h-0 min-w-0 overflow-hidden border-r">
+              <section className="h-full min-h-0 overflow-y-auto">
+                <div className="mx-auto flex h-full w-full max-w-5xl flex-col px-8 py-16 lg:px-16">
+                  <Textarea
+                    value={props.text}
+                    onChange={(event) => props.onTextChange(event.currentTarget.value)}
+                    className="field-sizing-fixed min-h-[420px] flex-1 resize-none overflow-y-auto border-0 bg-transparent p-0 text-lg leading-8 shadow-none focus-visible:ring-0 md:text-xl"
+                    placeholder="Write something to say…"
                   />
-                )}
-                <div className="mt-8 flex shrink-0 flex-wrap items-center justify-between gap-3">
-                  <Button variant="ghost" size="sm" onClick={props.onInsertPause}>
-                    Insert pause
-                  </Button>
-                  <div className="flex items-center gap-2">
-                    <Button onClick={props.onGenerate} disabled={props.generating || props.loading}>
-                      {props.generating ? (
-                        <>
-                          <LoaderCircle className="animate-spin" /> Generating
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles /> Generate speech
-                        </>
-                      )}
+                  {props.generating && (
+                    <LiveStreamBar
+                      streamPlaying={props.streamPlaying}
+                      elapsedSec={props.elapsedSec}
+                      progress={props.progress}
+                      onToggleStreamPlayback={props.onToggleStreamPlayback}
+                    />
+                  )}
+                  <div className="mt-8 flex shrink-0 flex-wrap items-center justify-between gap-3">
+                    <Button variant="ghost" size="sm" onClick={props.onInsertPause}>
+                      Insert pause
                     </Button>
-                    {props.generating && (
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        onClick={props.onStopGeneration}
-                        aria-label="Stop generation"
-                      >
-                        <Square />
+                    <div className="flex items-center gap-2">
+                      <Button onClick={props.onGenerate} disabled={props.generating || props.loading}>
+                        {props.generating ? (
+                          <>
+                            <LoaderCircle className="animate-spin" /> Generating
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles /> Generate speech
+                          </>
+                        )}
                       </Button>
-                    )}
+                      {props.generating && (
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={props.onStopGeneration}
+                          aria-label="Stop generation"
+                        >
+                          <Square />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
+              </section>
+            </main>
+            <aside className="min-h-0 overflow-hidden">
+              {" "}
+              <div className="flex h-full min-h-0 flex-col">
+                <div className="border-border flex shrink-0 gap-5 border-b px-5 pt-4">
+                  <TabButton active={rightTab === "settings"} onClick={() => setRightTab("settings")}>
+                    Settings
+                  </TabButton>
+                  <TabButton active={rightTab === "history"} onClick={() => setRightTab("history")}>
+                    History
+                  </TabButton>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  {rightTab === "settings" ? (
+                    <SettingsPanel {...props} />
+                  ) : (
+                    <HistoryPanel {...props} />
+                  )}
+                </div>
               </div>
-            </section>
-            {showTransport && (
-              <GeneratedAudioPlayer
-                clip={props.currentClip!}
-                src={props.generatedAudioSrc!}
-                onDownload={props.onDownloadClip}
-              />
-            )}
-          </main>
-          <aside className="min-h-0 overflow-hidden">
-            {" "}
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="border-border flex shrink-0 gap-5 border-b px-5 pt-4">
-                <TabButton active={rightTab === "settings"} onClick={() => setRightTab("settings")}>
-                  Settings
-                </TabButton>
-                <TabButton active={rightTab === "history"} onClick={() => setRightTab("history")}>
-                  History
-                </TabButton>
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                {rightTab === "settings" ? (
-                  <SettingsPanel {...props} selectedVoice={selectedVoice} />
-                ) : (
-                  <HistoryPanel {...props} />
-                )}
-              </div>
-            </div>
-          </aside>
+            </aside>
+          </div>
+          {showTransport && (
+            <GeneratedAudioPlayer
+              clip={props.currentClip!}
+              src={props.generatedAudioSrc!}
+              onDownload={props.onDownloadClip}
+            />
+          )}
         </div>
       </div>
     </TooltipProvider>
@@ -253,21 +254,39 @@ function LiveStreamBar({
   );
 }
 
-function SettingsPanel({ ...props }: TtsWorkspaceProps & { selectedVoice: (typeof STOCK_VOICES)[number] }) {
+function SettingsPanel(props: TtsWorkspaceProps) {
+  const stockVoices = useMemo<ElevenLabs.Voice[]>(
+    () =>
+      STOCK_VOICES.map((voice) => ({
+        voiceId: voice.id,
+        name: voice.name,
+        labels: { description: voice.description, tone: voice.tone },
+      })),
+    []
+  );
+  const hasActiveStockVoice =
+    props.selectedCustomVoiceId == null &&
+    Boolean(props.voiceId) &&
+    STOCK_VOICES.some((voice) => voice.id === props.stockVoice);
+
   return (
     <div className="flex flex-col gap-7 p-5">
       <section>
         <h2 className="text-sm font-medium">Voice</h2>
-        <div className="border-border mt-3 rounded-lg border">
+        <div className="mt-3 flex flex-col gap-2">
+          <VoicePicker
+            voices={stockVoices}
+            value={hasActiveStockVoice ? props.stockVoice : undefined}
+            onValueChange={(id) => props.onLoadVoice(id)}
+            placeholder={props.voiceId ? props.currentVoiceName : "Select a voice..."}
+          />
+          <Button variant="outline" className="w-full justify-start" onClick={() => props.onVoiceOpenChange(true)}>
+            <Mic className="size-4" /> Custom voices
+          </Button>
           <VoicePickerDialog
             open={props.voiceOpen}
             onOpenChange={props.onVoiceOpenChange}
-            selectedId={props.selectedVoice.id}
             selectedCustomVoiceId={props.selectedCustomVoiceId}
-            hasVoice={Boolean(props.voiceId)}
-            search={props.voiceSearch}
-            onSearchChange={props.onVoiceSearchChange}
-            onLoad={props.onLoadVoice}
             customVoices={props.customVoices}
             onSelectCustom={props.onSelectCustomVoice}
             onClone={props.onCloneVoice}
@@ -275,7 +294,6 @@ function SettingsPanel({ ...props }: TtsWorkspaceProps & { selectedVoice: (typeo
             onDeleteCustom={props.onDeleteVoice}
             loading={props.loading}
             variant={props.variant}
-            currentVoiceName={props.currentVoiceName}
           />
         </div>
       </section>
