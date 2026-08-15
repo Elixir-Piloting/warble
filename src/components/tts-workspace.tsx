@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Download, FileAudio, Gauge, History, LoaderCircle, Pause, Play, Search, Sparkles, Square } from "lucide-react";
+import { Download, FileAudio, Gauge, History, LoaderCircle, Mic, Pause, Play, Search, Sparkles, Square } from "lucide-react";
 import {
   AudioPlayerButton,
   AudioPlayerDuration,
@@ -8,6 +8,8 @@ import {
   AudioPlayerSpeed,
   AudioPlayerTime,
 } from "@/components/ui/audio-player";
+import { VoicePicker } from "@/components/ui/voice-picker";
+import type { ElevenLabs } from "@elevenlabs/elevenlabs-js";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,8 +58,6 @@ interface TtsWorkspaceProps {
   stockVoice: string;
   voiceOpen: boolean;
   onVoiceOpenChange: (open: boolean) => void;
-  voiceSearch: string;
-  onVoiceSearchChange: (value: string) => void;
   onLoadVoice: (spec?: string) => void;
   customVoices: VoiceRecord[];
   selectedCustomVoiceId: number | null;
@@ -86,7 +86,6 @@ interface TtsWorkspaceProps {
 
 export function TtsWorkspace(props: TtsWorkspaceProps) {
   const [rightTab, setRightTab] = useState<"settings" | "history">("history");
-  const selectedVoice = STOCK_VOICES.find((voice) => voice.id === props.stockVoice) ?? STOCK_VOICES[0];
   const showTransport = Boolean(props.currentClip && props.generatedAudioSrc);
 
   return (
@@ -155,7 +154,7 @@ export function TtsWorkspace(props: TtsWorkspaceProps) {
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   {rightTab === "settings" ? (
-                    <SettingsPanel {...props} selectedVoice={selectedVoice} />
+                    <SettingsPanel {...props} />
                   ) : (
                     <HistoryPanel {...props} />
                   )}
@@ -255,21 +254,39 @@ function LiveStreamBar({
   );
 }
 
-function SettingsPanel({ ...props }: TtsWorkspaceProps & { selectedVoice: (typeof STOCK_VOICES)[number] }) {
+function SettingsPanel(props: TtsWorkspaceProps) {
+  const stockVoices = useMemo<ElevenLabs.Voice[]>(
+    () =>
+      STOCK_VOICES.map((voice) => ({
+        voiceId: voice.id,
+        name: voice.name,
+        labels: { description: voice.description, tone: voice.tone },
+      })),
+    []
+  );
+  const hasActiveStockVoice =
+    props.selectedCustomVoiceId == null &&
+    Boolean(props.voiceId) &&
+    STOCK_VOICES.some((voice) => voice.id === props.stockVoice);
+
   return (
     <div className="flex flex-col gap-7 p-5">
       <section>
         <h2 className="text-sm font-medium">Voice</h2>
-        <div className="border-border mt-3 rounded-lg border">
+        <div className="mt-3 flex flex-col gap-2">
+          <VoicePicker
+            voices={stockVoices}
+            value={hasActiveStockVoice ? props.stockVoice : undefined}
+            onValueChange={(id) => props.onLoadVoice(id)}
+            placeholder={props.voiceId ? props.currentVoiceName : "Select a voice..."}
+          />
+          <Button variant="outline" className="w-full justify-start" onClick={() => props.onVoiceOpenChange(true)}>
+            <Mic className="size-4" /> Custom voices
+          </Button>
           <VoicePickerDialog
             open={props.voiceOpen}
             onOpenChange={props.onVoiceOpenChange}
-            selectedId={props.selectedVoice.id}
             selectedCustomVoiceId={props.selectedCustomVoiceId}
-            hasVoice={Boolean(props.voiceId)}
-            search={props.voiceSearch}
-            onSearchChange={props.onVoiceSearchChange}
-            onLoad={props.onLoadVoice}
             customVoices={props.customVoices}
             onSelectCustom={props.onSelectCustomVoice}
             onClone={props.onCloneVoice}
@@ -277,7 +294,6 @@ function SettingsPanel({ ...props }: TtsWorkspaceProps & { selectedVoice: (typeo
             onDeleteCustom={props.onDeleteVoice}
             loading={props.loading}
             variant={props.variant}
-            currentVoiceName={props.currentVoiceName}
           />
         </div>
       </section>

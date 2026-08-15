@@ -79,7 +79,6 @@ export default function App() {
   const [stockVoice, setStockVoice] = useState("alba");
   const [voiceId, setVoiceId] = useState<string | null>(null);
   const [voiceOpen, setVoiceOpen] = useState(false);
-  const [voiceSearch, setVoiceSearch] = useState("");
   const [text, setText] = useState("Hello! This is a test of the built in text to speech engine.");
   const [phase, setPhase] = useState<Phase>("idle");
   const [chunkCount, setChunkCount] = useState(0);
@@ -453,8 +452,6 @@ export default function App() {
         stockVoice={stockVoice}
         voiceOpen={voiceOpen}
         onVoiceOpenChange={setVoiceOpen}
-        voiceSearch={voiceSearch}
-        onVoiceSearchChange={setVoiceSearch}
         onLoadVoice={(spec) => void loadVoice(spec)}
         customVoices={customVoices}
         selectedCustomVoiceId={selectedCustomVoice?.id ?? null}
