@@ -18,6 +18,7 @@ import { GenerationSettings, GenerationSettingsPanel } from "@/components/genera
 import { HistoryItem } from "@/components/history-item";
 import { STOCK_VOICES } from "@/components/voice-data";
 import { VoicePickerDialog } from "@/components/voice-picker-dialog";
+import type { HistoryRecord, VoiceRecord } from "@/lib/api";
 
 interface ModelInfo {
   variant: string;
@@ -57,22 +58,48 @@ interface TtsWorkspaceProps {
   onVoiceOpenChange: (open: boolean) => void;
   voiceSearch: string;
   onVoiceSearchChange: (value: string) => void;
-  voiceSpec: string;
-  onVoiceSpecChange: (value: string) => void;
   onLoadVoice: (spec?: string) => void;
+  customVoices: VoiceRecord[];
+  selectedCustomVoiceId: number | null;
+  onSelectCustomVoice: (id: number) => void;
+  onCloneVoice: () => void;
+  onRenameVoice: (id: number, name: string) => void;
+  onDeleteVoice: (id: number) => void;
+  wizardOpen: boolean;
+  onWizardOpenChange: (open: boolean) => void;
+  currentVoiceName: string;
   onGenerate: () => void;
   onStopGeneration: () => void;
-  history: HistoryEntry[];
+  history: HistoryRecord[];
   currentClip: HistoryEntry | null;
   generatedAudioSrc: string | null;
-  onReplay: (entry: HistoryEntry) => void;
-  onDownload: (entry: HistoryEntry) => void;
+  onReplay: (record: HistoryRecord) => void;
+  onDownload: (record: HistoryRecord) => void;
+  onEdit: (record: HistoryRecord) => void;
+  onDeleteHistory: (record: HistoryRecord) => void;
   generationSettings: GenerationSettings;
   hasPendingSettings: boolean;
   onGenerationSettingsChange: (settings: GenerationSettings) => void;
   onReloadModel: () => void;
   onResetGenerationSettings: () => void;
   onInsertPause: () => void;
+}
+
+function historyRecordFromEntry(entry: HistoryEntry): HistoryRecord {
+  return {
+    id: entry.id,
+    name: entry.name,
+    text: "",
+    createdAt: entry.createdAt,
+    charCount: entry.charCount,
+    chunkCount: entry.chunkCount,
+    speechSec: entry.speechSec,
+    elapsedSec: entry.elapsedSec,
+    sampleRate: entry.sampleRate,
+    channels: entry.channels,
+    wavPath: "",
+    voiceLabel: null,
+  };
 }
 
 export function TtsWorkspace(props: TtsWorkspaceProps) {
@@ -135,7 +162,7 @@ export function TtsWorkspace(props: TtsWorkspaceProps) {
               <GeneratedAudioPlayer
                 clip={props.currentClip!}
                 src={props.generatedAudioSrc!}
-                onDownload={props.onDownload}
+                onDownload={(entry) => props.onDownload(historyRecordFromEntry(entry))}
               />
             )}
           </main>
@@ -254,14 +281,19 @@ function SettingsPanel({ ...props }: TtsWorkspaceProps & { selectedVoice: (typeo
             open={props.voiceOpen}
             onOpenChange={props.onVoiceOpenChange}
             selectedId={props.selectedVoice.id}
+            selectedCustomVoiceId={props.selectedCustomVoiceId}
             hasVoice={Boolean(props.voiceId)}
             search={props.voiceSearch}
             onSearchChange={props.onVoiceSearchChange}
             onLoad={props.onLoadVoice}
-            customVoice={props.voiceSpec}
-            onCustomVoiceChange={props.onVoiceSpecChange}
+            customVoices={props.customVoices}
+            onSelectCustom={props.onSelectCustomVoice}
+            onClone={props.onCloneVoice}
+            onRenameCustom={props.onRenameVoice}
+            onDeleteCustom={props.onDeleteVoice}
             loading={props.loading}
             variant={props.variant}
+            currentVoiceName={props.currentVoiceName}
           />
         </div>
       </section>
@@ -343,10 +375,13 @@ function HistoryPanel(props: TtsWorkspaceProps) {
             <HistoryItem
               key={entry.id}
               name={entry.name}
-              duration={entry.speechSec}
+              duration={entry.speechSec ?? 0}
+              voiceLabel={entry.voiceLabel}
               active={props.currentClip?.id === entry.id}
               onPlay={() => props.onReplay(entry)}
               onDownload={() => props.onDownload(entry)}
+              onEdit={() => props.onEdit(entry)}
+              onDelete={() => props.onDeleteHistory(entry)}
               disabled={props.generating}
             />
           ))}
