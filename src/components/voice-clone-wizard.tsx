@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, LoaderCircle, Mic, MicOff, Play, Upload } from "lucide-react";
+import { Check, LoaderCircle, Mic, MicOff, Pause, Play, Upload } from "lucide-react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/dialog";
 import { cloneVoice, type VoiceRecord } from "@/lib/api";
 import { blobToWavBytes, fileToWavBytes } from "@/lib/audio";
+import { useAudioPlayer } from "@/components/ui/audio-player";
+import { getVoicePreviewUrl } from "@/lib/preview";
 
 interface VoiceCloneWizardProps {
   open: boolean;
@@ -42,6 +44,7 @@ export function VoiceCloneWizard({ open, onOpenChange, onCloned }: VoiceCloneWiz
   const chunksRef = useRef<Blob[]>([]);
   const recTimerRef = useRef<number | null>(null);
   const sourceUrlRef = useRef<string | null>(null);
+  const player = useAudioPlayer();
 
   useEffect(() => {
     if (open) {
@@ -163,7 +166,7 @@ export function VoiceCloneWizard({ open, onOpenChange, onCloned }: VoiceCloneWiz
     }
   }
 
-  function togglePreview() {
+  function toggleSourcePreview() {
     const audio = audioRef.current;
     if (!audio) return;
     if (audio.paused) {
@@ -185,6 +188,17 @@ export function VoiceCloneWizard({ open, onOpenChange, onCloned }: VoiceCloneWiz
     } finally {
       setCloning(false);
     }
+  }
+
+  async function togglePreview() {
+    if (!cloned) return;
+    const id = `preview-${cloned.embeddingsPath}`;
+    if (player.isItemActive(id) && player.isPlaying) {
+      player.pause();
+      return;
+    }
+    const url = await getVoicePreviewUrl(cloned.embeddingsPath);
+    if (url) void player.play({ id, src: url, data: { kind: "preview", name: cloned.name } });
   }
 
   const hasSource = Boolean(wavBytes);
@@ -212,6 +226,16 @@ export function VoiceCloneWizard({ open, onOpenChange, onCloned }: VoiceCloneWiz
                 Voice saved · {(cloned.durationSec ?? 0).toFixed(1)}s source audio
               </p>
             </div>
+            <Button variant="outline" size="sm" onClick={() => void togglePreview()}>
+              {player.isItemActive(`preview-${cloned.embeddingsPath}`) && player.isPlaying ? (
+                <Pause className="size-4" />
+              ) : (
+                <Play className="size-4" />
+              )}
+              {player.isItemActive(`preview-${cloned.embeddingsPath}`) && player.isPlaying
+                ? "Pause preview"
+                : "Preview voice"}
+            </Button>
           </div>
         ) : step === 0 ? (
           <div className="flex flex-col gap-4">
@@ -262,7 +286,7 @@ export function VoiceCloneWizard({ open, onOpenChange, onCloned }: VoiceCloneWiz
                   className="hidden"
                   onError={() => setError("Preview audio could not be loaded")}
                 />
-                <Button variant="outline" size="icon" onClick={togglePreview} aria-label="Preview source audio">
+                <Button variant="outline" size="icon" onClick={toggleSourcePreview} aria-label="Preview source audio">
                   <Play className="size-4" />
                 </Button>
                 <span className="text-muted-foreground min-w-0 flex-1 truncate text-sm">{sourceName}</span>

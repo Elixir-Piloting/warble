@@ -26,6 +26,7 @@ pub fn run() {
             tts::load_tts_model,
             tts::get_tts_voice_state,
             tts::generate_tts_stream,
+            tts::generate_tts_preview,
             tts::cancel_generation,
             store::clone_voice,
             store::list_custom_voices,

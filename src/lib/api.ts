@@ -61,3 +61,7 @@ export function getHistoryAudio(id: number): Promise<ArrayBuffer> {
 export function deleteHistory(id: number): Promise<void> {
   return invoke("delete_history", { id });
 }
+
+export function generateTtsPreview(voiceSpec: string, text: string): Promise<ArrayBuffer> {
+  return invoke("generate_tts_preview", { voiceSpec, text });
+}

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
+import { AudioPlayerProvider } from "@/components/ui/audio-player";
 import { TtsWorkspace } from "@/components/tts-workspace";
 import { VoiceCloneWizard } from "@/components/voice-clone-wizard";
 import { STOCK_VOICES } from "@/components/voice-data";
@@ -458,7 +459,7 @@ export default function App() {
     selectedCustomVoice?.name ?? STOCK_VOICES.find((voice) => voice.id === stockVoice)?.name ?? stockVoice;
 
   return (
-    <>
+    <AudioPlayerProvider>
       <TtsWorkspace
         text={text}
         onTextChange={setText}
@@ -505,7 +506,7 @@ export default function App() {
         onOpenChange={setWizardOpen}
         onCloned={(voice) => void handleCloned(voice)}
       />
-    </>
+    </AudioPlayerProvider>
   );
 }
 
