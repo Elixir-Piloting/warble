@@ -347,6 +347,7 @@ export default function App() {
     setStreamedSec(0);
     setStreamPlaying(false);
     setStatus("Generation stopped");
+    void invoke("cancel_generation");
   }
   function toggleStreamPlayback() {
     const player = getPlayer();

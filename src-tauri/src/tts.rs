@@ -15,8 +15,8 @@
 //! in the app for streamed / progress notifications.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use pocket_tts::{ModelState, TTSModel};
 use candle_core::Device;
@@ -33,6 +33,9 @@ const EVENT_PREFIX: &str = "tts://";
 pub struct TtsState {
     pub(crate) model: Mutex<Option<TTSModel>>,
     voices: Mutex<HashMap<String, ModelState>>,
+    /// Set to true to cancel the currently-running generation before it
+    /// persists a history row.
+    cancel: Arc<AtomicBool>,
 }
 
 /// Monotonic id source for voice handles.
@@ -334,11 +337,19 @@ pub async fn generate_tts_stream(
     let char_count = text.chars().count() as i64;
     let t0 = std::time::Instant::now();
 
+    state.cancel.store(false, Ordering::Relaxed);
+    let cancel = state.cancel.clone();
+
     tauri::async_runtime::spawn_blocking(move || {
         let mut index: u32 = 0;
         let mut pcm_accum: Vec<u8> = Vec::new();
 
+        let mut cancelled = false;
         for chunk in model.generate_stream(&text, &voice_state) {
+            if cancel.load(Ordering::Relaxed) {
+                cancelled = true;
+                break;
+            }
             let tensor = match chunk {
                 Ok(t) => t,
                 Err(e) => {
@@ -385,6 +396,10 @@ pub async fn generate_tts_stream(
             index += 1;
         }
 
+        if cancelled {
+            return Ok(index);
+        }
+
         // Persist the finished generation (durable copy; the frontend keeps
         // its live in-memory playback). A persistence failure is non-fatal:
         // the audio still played, so only log it.
@@ -424,4 +439,12 @@ pub async fn generate_tts_stream(
     })
     .await
     .map_err(|e| format!("generation task panicked: {e}"))?
+}
+
+/// Signal the running generation (if any) to stop; it will not persist a
+/// history row.
+#[tauri::command]
+pub fn cancel_generation(state: State<'_, TtsState>) -> Result<(), String> {
+    state.cancel.store(true, Ordering::Relaxed);
+    Ok(())
 }
