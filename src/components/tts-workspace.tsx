@@ -65,8 +65,6 @@ interface TtsWorkspaceProps {
   onCloneVoice: () => void;
   onRenameVoice: (id: number, name: string) => void;
   onDeleteVoice: (id: number) => void;
-  wizardOpen: boolean;
-  onWizardOpenChange: (open: boolean) => void;
   currentVoiceName: string;
   onGenerate: () => void;
   onStopGeneration: () => void;

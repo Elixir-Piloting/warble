@@ -54,6 +54,7 @@ export function VoicePickerDialog({
   const voices = STOCK_VOICES.filter((voice) =>
     `${voice.name} ${voice.description} ${voice.tone}`.toLowerCase().includes(search.toLowerCase())
   );
+  const selectedStock = STOCK_VOICES.find((voice) => voice.id === selectedId);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -63,7 +64,11 @@ export function VoicePickerDialog({
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium">{hasVoice ? currentVoiceName : "Choose a voice"}</span>
             <span className="text-muted-foreground block truncate text-xs">
-              {hasVoice ? "Custom voice" : "Browse voice library"}
+              {hasVoice
+                ? selectedCustomVoiceId != null
+                  ? "Custom voice"
+                  : selectedStock?.description ?? "Stock voice"
+                : "Browse voice library"}
             </span>
           </span>
           <ChevronRight className="text-muted-foreground size-4" />
@@ -93,7 +98,7 @@ export function VoicePickerDialog({
                   <span className="block font-medium">{voice.name}</span>
                   <span className="text-muted-foreground mt-1 block truncate text-xs">{voice.description}</span>
                 </span>
-                {selectedId === voice.id && hasVoice && <Check className="text-primary" />}
+                {selectedId === voice.id && hasVoice && !selectedCustomVoiceId && <Check className="text-primary" />}
               </button>
             ))}
           </div>

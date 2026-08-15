@@ -27,6 +27,7 @@ export function VoiceCloneWizard({ open, onOpenChange, onCloned }: VoiceCloneWiz
   const [step, setStep] = useState(0);
   const [tab, setTab] = useState<Tab>("file");
   const [sourceName, setSourceName] = useState<string | null>(null);
+  const [sourceType, setSourceType] = useState<"file" | "recording">("file");
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [wavBytes, setWavBytes] = useState<Uint8Array | null>(null);
   const [name, setName] = useState("");
@@ -40,12 +41,14 @@ export function VoiceCloneWizard({ open, onOpenChange, onCloned }: VoiceCloneWiz
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recTimerRef = useRef<number | null>(null);
+  const sourceUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setStep(0);
       setTab("file");
       setSourceName(null);
+      setSourceType("file");
       setSourceUrl(null);
       setWavBytes(null);
       setName("");
@@ -54,14 +57,34 @@ export function VoiceCloneWizard({ open, onOpenChange, onCloned }: VoiceCloneWiz
       setRecTime(0);
     } else {
       stopRecording();
+      clearSourcePreview();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEffect(() => {
-    return () => stopRecording();
+    return () => {
+      stopRecording();
+      clearSourcePreview();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function setSourcePreview(url: string | null) {
+    if (sourceUrlRef.current && sourceUrlRef.current !== url) {
+      URL.revokeObjectURL(sourceUrlRef.current);
+    }
+    sourceUrlRef.current = url;
+    setSourceUrl(url);
+  }
+
+  function clearSourcePreview() {
+    if (sourceUrlRef.current) {
+      URL.revokeObjectURL(sourceUrlRef.current);
+      sourceUrlRef.current = null;
+    }
+    setSourceUrl(null);
+  }
 
   function stopRecording() {
     if (mediaRef.current && mediaRef.current.state !== "inactive") {
@@ -85,7 +108,8 @@ export function VoiceCloneWizard({ open, onOpenChange, onCloned }: VoiceCloneWiz
     try {
       const bytes = await fileToWavBytes(path);
       setSourceName(path.split(/[\\/]/).pop() ?? path);
-      setSourceUrl(URL.createObjectURL(new Blob([bytes as BlobPart])));
+      setSourceType("file");
+      setSourcePreview(URL.createObjectURL(new Blob([bytes as BlobPart])));
       setWavBytes(bytes);
       setError(null);
     } catch (err) {
@@ -107,11 +131,13 @@ export function VoiceCloneWizard({ open, onOpenChange, onCloned }: VoiceCloneWiz
         if (event.data.size > 0) chunksRef.current.push(event.data);
       };
       rec.onstop = async () => {
+        if (mediaRef.current !== rec) return;
         const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
         try {
           const bytes = await blobToWavBytes(blob);
           setSourceName("Microphone recording");
-          setSourceUrl(URL.createObjectURL(new Blob([bytes as BlobPart])));
+          setSourceType("recording");
+          setSourcePreview(URL.createObjectURL(new Blob([bytes as BlobPart])));
           setWavBytes(bytes);
           setError(null);
         } catch (err) {
@@ -145,11 +171,7 @@ export function VoiceCloneWizard({ open, onOpenChange, onCloned }: VoiceCloneWiz
     setCloning(true);
     setError(null);
     try {
-      const voice = await cloneVoice(
-        name.trim(),
-        wavBytes,
-        sourceName === "Microphone recording" ? "recording" : "file"
-      );
+      const voice = await cloneVoice(name.trim(), wavBytes, sourceType);
       setCloned(voice);
     } catch (err) {
       setError(String(err));
