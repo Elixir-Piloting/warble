@@ -440,60 +440,48 @@ pub async fn clone_voice(
         let store = store_for_task;
         let id = store.insert_voice(&name, &source)?;
 
-        let cleanup = |id: i64, dir: &Path| {
+        let result = (|| -> Result<(), String> {
+            let voices_root = store.data_dir().join("voices");
+            std::fs::create_dir_all(&voices_root).map_err(|e| e.to_string())?;
+            let tmp_dir = voices_root.join(format!(".tmp-{id}"));
+            std::fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
+
+            let wav_path = tmp_dir.join("source.wav");
+            std::fs::write(&wav_path, &wav_bytes)
+                .map_err(|e| format!("failed to write source audio: {e}"))?;
+
+            let prompt = model
+                .encode_voice_prompt_from_bytes(&wav_bytes)
+                .map_err(|e| format!("voice cloning failed: {e}"))?;
+            let mut tensors = HashMap::new();
+            tensors.insert("audio_prompt".to_string(), prompt);
+            let safetensors_path = tmp_dir.join("embeddings.safetensors");
+            candle_core::safetensors::save(&tensors, &safetensors_path)
+                .map_err(|e| format!("failed to write embeddings: {e}"))?;
+
+            let (audio, sample_rate) = pocket_tts::audio::read_wav_from_bytes(&wav_bytes)
+                .map_err(|e| format!("failed to parse wav: {e}"))?;
+            let duration_sec = audio.dims()[1] as f64 / sample_rate as f64;
+
+            let final_dir = store.voice_dir(id);
+            std::fs::rename(&tmp_dir, &final_dir)
+                .map_err(|e| format!("failed to finalize voice files: {e}"))?;
+
+            store.set_voice_files(
+                id,
+                &final_dir.join("source.wav"),
+                &final_dir.join("embeddings.safetensors"),
+                Some(duration_sec),
+                Some(sample_rate as i64),
+            )
+        })();
+
+        if let Err(e) = result {
             let _ = store.delete_voice(id);
-            let _ = std::fs::remove_dir_all(dir);
-        };
-
-        let voices_root = store.data_dir().join("voices");
-        std::fs::create_dir_all(&voices_root).map_err(|e| e.to_string())?;
-        let tmp_dir = voices_root.join(format!(".tmp-{id}"));
-        std::fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
-
-        let wav_path = tmp_dir.join("source.wav");
-        if let Err(e) = std::fs::write(&wav_path, &wav_bytes) {
-            cleanup(id, &tmp_dir);
-            return Err(format!("failed to write source audio: {e}"));
+            let _ = std::fs::remove_dir_all(store.voice_dir(id));
+            let _ = std::fs::remove_dir_all(store.data_dir().join("voices").join(format!(".tmp-{id}")));
+            return Err(e);
         }
-
-        let prompt = match model.encode_voice_prompt_from_bytes(&wav_bytes) {
-            Ok(p) => p,
-            Err(e) => {
-                cleanup(id, &tmp_dir);
-                return Err(format!("voice cloning failed: {e}"));
-            }
-        };
-        let mut tensors = HashMap::new();
-        tensors.insert("audio_prompt".to_string(), prompt);
-        let safetensors_path = tmp_dir.join("embeddings.safetensors");
-        if let Err(e) = candle_core::safetensors::save(&tensors, &safetensors_path) {
-            cleanup(id, &tmp_dir);
-            return Err(format!("failed to write embeddings: {e}"));
-        }
-
-        let (audio, sample_rate) = match pocket_tts::audio::read_wav_from_bytes(&wav_bytes) {
-            Ok(v) => v,
-            Err(e) => {
-                cleanup(id, &tmp_dir);
-                return Err(format!("failed to parse wav: {e}"));
-            }
-        };
-        let num_samples = audio.dims()[1] as f64;
-        let duration_sec = num_samples / sample_rate as f64;
-
-        let final_dir = store.voice_dir(id);
-        if let Err(e) = std::fs::rename(&tmp_dir, &final_dir) {
-            cleanup(id, &tmp_dir);
-            return Err(format!("failed to finalize voice files: {e}"));
-        }
-
-        store.set_voice_files(
-            id,
-            &final_dir.join("source.wav"),
-            &final_dir.join("embeddings.safetensors"),
-            Some(duration_sec),
-            Some(sample_rate as i64),
-        )?;
 
         Ok(id)
     })
